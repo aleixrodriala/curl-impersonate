@@ -1,0 +1,5 @@
+/.venv/
+/.pytest_cache/
+/.ruff_cache/
+/.cache/
+/src/*.egg-info/

@@ -1,0 +1,222 @@
+name: Harvest consumer Chrome fingerprints
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: consumer-chrome-fingerprint-harvest
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    name: Capture ${{ matrix.chrome_platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            chrome_platform: linux
+          - os: windows-2025
+            chrome_platform: win64
+          - os: macos-15-intel
+            chrome_platform: mac
+          - os: macos-15
+            chrome_platform: mac_arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Update consumer Chrome on Linux
+        if: runner.os == 'Linux'
+        run: |
+          curl -fsSLo "${RUNNER_TEMP}/google-chrome.deb" \
+            https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt-get update
+          sudo apt-get install -y "${RUNNER_TEMP}/google-chrome.deb"
+
+      - name: Update consumer Chrome on Windows
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: choco upgrade googlechrome -y --no-progress
+
+      - name: Update consumer Chrome on macOS
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        run: brew install --cask --force google-chrome
+
+      - name: Install harvester
+        run: |
+          python -m pip install uv
+          uv sync --project tools/fingerprint-harvester
+
+      - name: Capture headful Chrome on Linux
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run -a uv run --project tools/fingerprint-harvester \
+            curl-impersonate-harvest harvest \
+            --platform "${{ matrix.chrome_platform }}" \
+            --browser-mode headful \
+            --samples 5 \
+            --workspace "${RUNNER_TEMP}/fingerprint-harvester"
+
+      - name: Capture headful Chrome on Windows or macOS
+        if: runner.os != 'Linux'
+        run: >-
+          uv run --project tools/fingerprint-harvester
+          curl-impersonate-harvest harvest
+          --platform "${{ matrix.chrome_platform }}"
+          --browser-mode headful
+          --samples 5
+          --workspace "${{ runner.temp }}/fingerprint-harvester"
+
+      - name: Upload sanitized evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrome-${{ matrix.chrome_platform }}
+          path: ${{ runner.temp }}/fingerprint-harvester/captures
+          if-no-files-found: error
+          retention-days: 7
+
+  propose:
+    name: Propose a native Chrome profile
+    needs: capture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install harvester
+        run: |
+          python -m pip install uv
+          uv sync --project tools/fingerprint-harvester
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf automake build-essential cmake curl gperf libtool \
+            ninja-build pkg-config
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: chrome-*
+          path: ${{ runner.temp }}/fingerprint-evidence
+          merge-multiple: true
+
+      - name: Prepare candidate and retained evidence
+        id: candidate
+        run: |
+          set -euo pipefail
+          evidence_root="${RUNNER_TEMP}/fingerprint-evidence"
+          mapfile -t manifests < <(find "$evidence_root" -name manifest.json -print)
+          if [[ ${#manifests[@]} -ne 4 ]]; then
+            echo "Expected four platform manifests, found ${#manifests[@]}" >&2
+            exit 1
+          fi
+
+          mapfile -t majors < <(
+            printf '%s\n' "${manifests[@]}" |
+              xargs -n1 jq -r '.expected_release.version' |
+              cut -d. -f1 |
+              sort -u
+          )
+          if [[ ${#majors[@]} -ne 1 ]]; then
+            echo "Consumer Stable has not reached the same major on every OS."
+            echo "propose=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          target="chrome${majors[0]}"
+          if [[ -f "profiles/chrome/${target}.json" ]]; then
+            echo "Declarative profile ${target} already exists."
+            echo "propose=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          retained="profiles/evidence/${target}"
+          mkdir -p "$retained"
+          for manifest in "${manifests[@]}"; do
+            bundle="$(dirname "$manifest")"
+            platform="$(jq -r '.platform' "$manifest")"
+            cp -R "$bundle" "$retained/$platform"
+          done
+
+          reference="$retained/mac"
+          for platform in linux win64 mac_arm64; do
+            uv run --project tools/fingerprint-harvester \
+              curl-impersonate-harvest diff --transport-only \
+              "$reference" "$retained/$platform"
+          done
+
+          uv run --project tools/fingerprint-harvester \
+            curl-impersonate-harvest candidate \
+            "$reference" \
+            --target "$target" \
+            --output "profiles/chrome/${target}.json"
+          uv run --project tools/fingerprint-harvester \
+            curl-impersonate-harvest render \
+            "profiles/chrome/${target}.json" \
+            --output "profiles/generated/${target}.inc"
+
+          echo "propose=true" >> "$GITHUB_OUTPUT"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+
+      - name: Build and replay native candidate
+        if: steps.candidate.outputs.propose == 'true'
+        env:
+          TARGET: ${{ steps.candidate.outputs.target }}
+        run: |
+          set -euo pipefail
+          make prepare-libidn2 BUILD_DIR=build JOBS=4
+          make build BUILD_DIR=build JOBS=4
+          make checkbuild BUILD_DIR=build
+          uv run --project tools/fingerprint-harvester \
+            curl-impersonate-harvest replay \
+            "profiles/evidence/${TARGET}/mac" \
+            --curl-binary build/deps/build/curl/src/curl-impersonate \
+            --target "$TARGET" \
+            --samples 3 \
+            --output "${RUNNER_TEMP}/replay/${TARGET}"
+
+      - name: Open draft profile PR
+        if: steps.candidate.outputs.propose == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ steps.candidate.outputs.target }}
+        run: |
+          set -euo pipefail
+          branch="automation/fingerprint-${TARGET}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$branch:refs/remotes/origin/$branch" || true
+          git switch -C "$branch"
+          git add profiles
+          git commit -m "Add ${TARGET} fingerprint candidate"
+          git push --force-with-lease origin "HEAD:${branch}"
+
+          if [[ -z "$(gh pr list --head "$branch" --json number --jq '.[0].number')" ]]; then
+            gh pr create \
+              --base main \
+              --head "$branch" \
+              --draft \
+              --title "Add ${TARGET} fingerprint candidate" \
+              --body "Automated consumer-Chrome capture and generated native initializer. Transport semantics matched Linux, Windows, macOS Intel, and macOS ARM. The superbuild injected the initializer, the native build passed, and replay matched the retained Chrome evidence. Manual review is still required before merge."
+          fi

@@ -1,0 +1,33 @@
+[project]
+name = "curl-impersonate-fingerprint-harvester"
+version = "0.1.0"
+description = "Capture and compile consumer browser wire fingerprints."
+requires-python = ">=3.10"
+dependencies = ["playwright>=1.60.0,<2.0"]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.1.1,<9.0",
+  "ruff>=0.3.5,<1.0",
+]
+
+[project.scripts]
+curl-impersonate-harvest = "fingerprint_harvester.cli:main"
+
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "UP", "B", "SIM"]
+ignore = ["UP007", "UP045"]

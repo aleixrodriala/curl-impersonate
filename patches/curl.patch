@@ -1431,7 +1431,7 @@ index d5337eb353..b2fb669979 100644
  /**
   * Return the n-th header entry or NULL if it does not exist.
 diff --git a/lib/easy.c b/lib/easy.c
-index d60bdaed7b..fe9d1e7517 100644
+index d60bdaed7b..470538ed72 100644
 --- a/lib/easy.c
 +++ b/lib/easy.c
 @@ -70,10 +70,14 @@
@@ -1449,7 +1449,7 @@ index d60bdaed7b..fe9d1e7517 100644
  
  #include "easy_lock.h"
  
-@@ -323,6 +327,389 @@ CURLsslset curl_global_sslset(curl_sslbackend id, const char *name,
+@@ -323,6 +327,390 @@ CURLsslset curl_global_sslset(curl_sslbackend id, const char *name,
    return rc;
  }
  
@@ -1472,13 +1472,10 @@ index d60bdaed7b..fe9d1e7517 100644
 +  }
 +
 +  // Prefer user set versions
-+  long selected_http_version;
 +  if (data->set.httpwant != CURL_HTTP_VERSION_NONE) {
 +    ret = curl_easy_setopt(data, CURLOPT_HTTP_VERSION, data->set.httpwant);
-+    selected_http_version = data->set.httpwant;
 +  } else {
 +    ret = curl_easy_setopt(data, CURLOPT_HTTP_VERSION, opts->httpversion);
-+    selected_http_version = opts->httpversion;
 +  }
 +
 +  if(ret)
@@ -1550,15 +1547,19 @@ index d60bdaed7b..fe9d1e7517 100644
 +      return ret;
 +  }
 +
-+  // always enable this for browsers
-+  ret = curl_easy_setopt(data, CURLOPT_TLS_SIGNED_CERT_TIMESTAMPS, 1);
++  ret = curl_easy_setopt(data, CURLOPT_TLS_SIGNED_CERT_TIMESTAMPS,
++                         opts->tls_signed_cert_timestamps ? 1L : 0L);
 +  if(ret)
 +    return ret;
 +
-+  // always enable this for browsers
-+  ret = curl_easy_setopt(data, CURLOPT_TLS_STATUS_REQUEST, 1);
++  ret = curl_easy_setopt(data, CURLOPT_TLS_STATUS_REQUEST, 1L);
 +  if(ret)
 +    return ret;
++
++  data->set.http3_disable_tls_signed_cert_timestamps =
++    opts->http3_disable_tls_signed_cert_timestamps;
++  data->set.http3_disable_tls_status_request =
++    opts->http3_disable_tls_status_request;
 +
 +  if(opts->tls_permute_extensions) {
 +    ret = curl_easy_setopt(data, CURLOPT_SSL_PERMUTE_EXTENSIONS, 1);
@@ -1839,7 +1840,7 @@ index d60bdaed7b..fe9d1e7517 100644
  /*
   * curl_easy_init() is the external interface to alloc, setup and init an
   * easy handle that is returned. If anything goes wrong, NULL is returned.
-@@ -331,6 +718,8 @@ CURL *curl_easy_init(void)
+@@ -331,6 +719,8 @@ CURL *curl_easy_init(void)
  {
    CURLcode result;
    struct Curl_easy *data;
@@ -1848,7 +1849,7 @@ index d60bdaed7b..fe9d1e7517 100644
  
    /* Make sure we inited the global SSL stuff */
    global_init_lock();
-@@ -353,6 +742,30 @@ CURL *curl_easy_init(void)
+@@ -353,6 +743,30 @@ CURL *curl_easy_init(void)
      return NULL;
    }
  
@@ -1879,7 +1880,7 @@ index d60bdaed7b..fe9d1e7517 100644
    return data;
  }
  
-@@ -1027,6 +1440,13 @@ CURL *curl_easy_duphandle(CURL *curl)
+@@ -1027,6 +1441,13 @@ CURL *curl_easy_duphandle(CURL *curl)
        goto fail;
    }
  
@@ -1893,7 +1894,7 @@ index d60bdaed7b..fe9d1e7517 100644
    /* Reinitialize an SSL engine for the new handle
     * note: the engine name has already been copied by dupset */
    if(outcurl->set.str[STRING_SSL_ENGINE]) {
-@@ -1088,6 +1508,9 @@ fail:
+@@ -1088,6 +1509,9 @@ fail:
   */
  void curl_easy_reset(CURL *curl)
  {
@@ -1903,7 +1904,7 @@ index d60bdaed7b..fe9d1e7517 100644
    struct Curl_easy *data = curl;
    if(!GOOD_EASY_HANDLE(data))
      return;
-@@ -1120,6 +1543,23 @@ void curl_easy_reset(CURL *curl)
+@@ -1120,6 +1544,23 @@ void curl_easy_reset(CURL *curl)
    Curl_http_auth_cleanup_digest(data);
  #endif
    data->master_mid = UINT32_MAX;
@@ -5549,10 +5550,10 @@ index 0000000000..928315b46b
 +const size_t num_impersonations = sizeof(impersonations) / sizeof(impersonations[0]);
 diff --git a/lib/impersonate.h b/lib/impersonate.h
 new file mode 100644
-index 0000000000..d44b1fd0de
+index 0000000000..01db5bf028
 --- /dev/null
 +++ b/lib/impersonate.h
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,84 @@
 +#ifndef HEADER_CURL_IMPERSONATE_H
 +#define HEADER_CURL_IMPERSONATE_H
 +
@@ -5609,6 +5610,8 @@ index 0000000000..d44b1fd0de
 +  bool tls_permute_extensions;
 +  bool tls_use_new_alps_codepoint;
 +  bool tls_signed_cert_timestamps;
++  bool http3_disable_tls_signed_cert_timestamps;
++  bool http3_disable_tls_status_request;
 +  const char *ech;
 +  const char *tls_extension_order;
 +  const char *http3_tls_extension_order;
@@ -7114,7 +7117,7 @@ index 505e08a7e1..ad8440dd9c 100644
        /* There is a connection that *might* become usable for multiplexing
           "soon", and we wait for that */
 diff --git a/lib/urldata.h b/lib/urldata.h
-index d4d336d8db..73de71edeb 100644
+index d4d336d8db..f5c1d15cc4 100644
 --- a/lib/urldata.h
 +++ b/lib/urldata.h
 @@ -193,6 +193,7 @@ struct ConnectBits {
@@ -7243,7 +7246,7 @@ index d4d336d8db..73de71edeb 100644
  #endif
    BIT(prefer_ascii);     /* ASCII rather than binary */
    BIT(remote_append);    /* append, not overwrite, on upload */
-@@ -1175,7 +1224,17 @@ struct UserDefined {
+@@ -1175,7 +1224,19 @@ struct UserDefined {
    BIT(sasl_ir);         /* Enable/disable SASL initial response */
    BIT(tcp_keepalive);  /* use TCP keepalives */
    BIT(tcp_fastopen);   /* use TCP Fast Open */
@@ -7257,11 +7260,13 @@ index d4d336d8db..73de71edeb 100644
 +  BIT(tls_key_usage_no_check);  /* TLS key_usage_check? */
 +  BIT(tls_signed_cert_timestamps);  /* TLS signed cert timestamps? */
 +  BIT(tls_status_request);  /* TLS status request */
++  BIT(http3_disable_tls_signed_cert_timestamps); /* omit SCT on HTTP/3 */
++  BIT(http3_disable_tls_status_request); /* omit status_request on HTTP/3 */
 +  BIT(tls_use_new_alps_codepoint); /* TLS use new alps codepoint */
    BIT(path_as_is);     /* allow dotdots? */
    BIT(pipewait);       /* wait for multiplex status before starting a new
                            connection */
-@@ -1197,10 +1256,15 @@ struct UserDefined {
+@@ -1197,10 +1258,15 @@ struct UserDefined {
    BIT(doh_verifystatus);   /* DoH certificate status verification */
  #endif
    BIT(http09_allowed); /* allow HTTP/0.9 responses */
@@ -8839,7 +8844,7 @@ index dfb8346c1a..602402e256 100644
    return CURLE_OK;
  }
 diff --git a/lib/vtls/openssl.c b/lib/vtls/openssl.c
-index 010bbb9825..a5bdd880be 100644
+index 010bbb9825..88ae2c6d84 100644
 --- a/lib/vtls/openssl.c
 +++ b/lib/vtls/openssl.c
 @@ -68,9 +68,24 @@
@@ -9274,7 +9279,7 @@ index 010bbb9825..a5bdd880be 100644
  
    /* mitigate CVE-2010-4180 */
    ctx_options &= ~(ctx_option_t)SSL_OP_NETSCAPE_REUSE_CIPHER_CHANGE_BUG;
-@@ -3815,6 +4179,21 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3815,6 +4179,25 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
    /* We do retry writes sometimes from another buffer address */
    SSL_CTX_set_mode(octx->ssl_ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
  
@@ -9285,18 +9290,22 @@ index 010bbb9825..a5bdd880be 100644
 +                   SSL_MODE_ENABLE_FALSE_START);
 +
 +  /* Enable TLS extension 18, signed_certificate_timestamp. */
-+  if(data->set.tls_signed_cert_timestamps)
++  if(data->set.tls_signed_cert_timestamps &&
++     !(peer->transport == TRNSPRT_QUIC &&
++       data->set.http3_disable_tls_signed_cert_timestamps))
 +    SSL_CTX_enable_signed_cert_timestamps(octx->ssl_ctx);
 +
 +  /* Enable TLS extension 5, status_request. */
-+  if(data->set.tls_status_request)
++  if(data->set.tls_status_request &&
++     !(peer->transport == TRNSPRT_QUIC &&
++       data->set.http3_disable_tls_status_request))
 +    SSL_CTX_enable_ocsp_stapling(octx->ssl_ctx);
 +#endif
 +
    ciphers = conn_config->cipher_list;
    if(!ciphers && (peer->transport != TRNSPRT_QUIC))
      ciphers = NULL;
-@@ -3873,7 +4252,8 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3873,7 +4256,8 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
      }
    }
  
@@ -9306,7 +9315,7 @@ index 010bbb9825..a5bdd880be 100644
  #define OSSL_SIGALG_CAST(x) OSSL_CURVE_CAST(x)
    {
      const char *signature_algorithms = conn_config->signature_algorithms;
-@@ -3888,6 +4268,34 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3888,6 +4272,34 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
    }
  #endif
  
@@ -9341,7 +9350,7 @@ index 010bbb9825..a5bdd880be 100644
  #if defined(HAVE_OPENSSL_SRP) && defined(USE_TLS_SRP)
    if(ssl_config->primary.username && Curl_auth_allowed_to_host(data)) {
      char * const ssl_username = ssl_config->primary.username;
-@@ -3913,6 +4321,56 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3913,6 +4325,56 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
    }
  #endif /* HAVE_OPENSSL_SRP && USE_TLS_SRP */
  
@@ -9533,7 +9542,7 @@ index 96cb7d15ed..ca72a31d28 100644
   * Free all allocated data and reset peer information.
   */
 diff --git a/lib/vtls/vtls_config.c b/lib/vtls/vtls_config.c
-index 4a9b69654b..d3c73e598a 100644
+index 4a9b69654b..bb98aa7708 100644
 --- a/lib/vtls/vtls_config.c
 +++ b/lib/vtls/vtls_config.c
 @@ -127,6 +127,8 @@ void Curl_ssl_config_cleanup(struct ssl_primary_config *sslc)
@@ -9579,7 +9588,7 @@ index 4a9b69654b..d3c73e598a 100644
    CLONE_STRING(signature_algorithms);
    CLONE_STRING(CRLfile);
    /* SSL credentials: client certificate, SRP auth */
-@@ -253,10 +261,14 @@ static void ssl_easy_config_compl_options(struct Curl_peer *origin,
+@@ -253,10 +261,16 @@ static void ssl_easy_config_compl_options(struct Curl_peer *origin,
                             !!(options & CURLSSLOPT_AUTO_CLIENT_CERT);
  }
  
@@ -9590,13 +9599,15 @@ index 4a9b69654b..d3c73e598a 100644
 +                                         struct connectdata *conn)
  {
    struct ssl_config_data *sslc = &data->set.ssl;
-+  const bool is_h3 = conn && conn->transport_wanted == TRNSPRT_QUIC;
++  const bool is_h3 = conn &&
++    (conn->transport_wanted == TRNSPRT_QUIC ||
++     data->state.http_neg.wanted == CURL_HTTP_V3x);
 +  const bool is_wss = conn && conn->scheme &&
 +    (conn->scheme->protocol & CURLPROTO_WSS);
  #if defined(CURL_CA_PATH) || defined(CURL_CA_BUNDLE)
    struct UserDefined *set = &data->set;
    CURLcode result;
-@@ -293,6 +305,29 @@ CURLcode Curl_ssl_easy_config_complete(struct Curl_easy *data,
+@@ -293,6 +307,29 @@ CURLcode Curl_ssl_easy_config_complete(struct Curl_easy *data,
      data->set.str[STRING_SSL_SIGNATURE_ALGORITHMS];
    sslc->primary.ca_info_blob = data->set.blobs[BLOB_CAINFO];
    sslc->primary.curves = data->set.str[STRING_SSL_EC_CURVES];
@@ -9626,7 +9637,7 @@ index 4a9b69654b..d3c73e598a 100644
    /* Maybe these should not be used for another origin. But for
     * backwards compatibility, keep them in. */
    sslc->primary.issuercert = data->set.str[STRING_SSL_ISSUERCERT];
-@@ -358,6 +393,7 @@ CURLcode Curl_ssl_easy_config_complete(struct Curl_easy *data,
+@@ -358,6 +395,7 @@ CURLcode Curl_ssl_easy_config_complete(struct Curl_easy *data,
    sslc->primary.CApath = data->set.str[STRING_SSL_CAPATH_PROXY];
    sslc->primary.cipher_list = data->set.str[STRING_SSL_CIPHER_LIST_PROXY];
    sslc->primary.cipher_list13 = data->set.str[STRING_SSL_CIPHER13_LIST_PROXY];
@@ -9634,7 +9645,7 @@ index 4a9b69654b..d3c73e598a 100644
    sslc->primary.pinned_key = data->set.str[STRING_SSL_PINNEDPUBLICKEY_PROXY];
    sslc->primary.cert_blob = data->set.blobs[BLOB_CERT_PROXY];
    sslc->primary.ca_info_blob = data->set.blobs[BLOB_CAINFO_PROXY];
-@@ -379,6 +415,18 @@ CURLcode Curl_ssl_easy_config_complete(struct Curl_easy *data,
+@@ -379,14 +417,31 @@ CURLcode Curl_ssl_easy_config_complete(struct Curl_easy *data,
    return CURLE_OK;
  }
  
@@ -9653,6 +9664,19 @@ index 4a9b69654b..d3c73e598a 100644
  CURLcode Curl_ssl_conn_config_init(struct Curl_easy *data,
                                     struct connectdata *conn)
  {
++  const bool is_h3 = conn->transport_wanted == TRNSPRT_QUIC ||
++    data->state.http_neg.wanted == CURL_HTTP_V3x;
++
+   /* Clone "primary" SSL configurations from the easy handle to
+    * the connection. They are used for connection cache matching and
+    * probably outlive the easy handle */
+   if(!clone_ssl_primary_config(&data->set.ssl.primary, &conn->ssl_config))
+     return CURLE_OUT_OF_MEMORY;
++  if(is_h3 && data->set.http3_disable_tls_status_request)
++    conn->ssl_config.verifystatus = FALSE;
+ #ifndef CURL_DISABLE_PROXY
+   if(!clone_ssl_primary_config(&data->set.proxy_ssl.primary,
+                                &conn->proxy_ssl_config))
 diff --git a/lib/vtls/vtls_config.h b/lib/vtls/vtls_config.h
 index 44e691dd26..be680be477 100644
 --- a/lib/vtls/vtls_config.h

@@ -1,0 +1,63 @@
+if(NOT DEFINED CURL_SOURCE_DIR)
+  message(FATAL_ERROR "CURL_SOURCE_DIR is required")
+endif()
+if(NOT DEFINED GENERATED_PROFILE_DIR)
+  message(FATAL_ERROR "GENERATED_PROFILE_DIR is required")
+endif()
+
+file(GLOB _generated_profiles "${GENERATED_PROFILE_DIR}/*.inc")
+if(NOT _generated_profiles)
+  message(STATUS "No generated impersonation profiles to inject")
+  return()
+endif()
+list(SORT _generated_profiles)
+
+set(_impersonate_source "${CURL_SOURCE_DIR}/lib/impersonate.c")
+if(NOT EXISTS "${_impersonate_source}")
+  message(FATAL_ERROR "Patched source is missing ${_impersonate_source}")
+endif()
+file(READ "${_impersonate_source}" _source)
+
+set(_initializers "")
+set(_generated_targets "")
+foreach(_profile IN LISTS _generated_profiles)
+  file(READ "${_profile}" _initializer)
+  string(REGEX MATCH "\\.target = \"([a-z][a-z0-9_]*)\"" _match "${_initializer}")
+  if(NOT _match)
+    message(FATAL_ERROR "Generated profile has no valid target: ${_profile}")
+  endif()
+  set(_target "${CMAKE_MATCH_1}")
+  string(FIND "${_source}" ".target = \"${_target}\"" _existing_target)
+  if(NOT _existing_target EQUAL -1)
+    message(FATAL_ERROR
+      "Generated profile ${_target} duplicates a patched native target")
+  endif()
+  list(FIND _generated_targets "${_target}" _duplicate_target)
+  if(NOT _duplicate_target EQUAL -1)
+    message(FATAL_ERROR
+      "Generated profile ${_target} is declared by more than one file")
+  endif()
+  list(APPEND _generated_targets "${_target}")
+  string(APPEND _initializers "${_initializer}")
+  message(STATUS "Injecting generated impersonation profile ${_target}")
+endforeach()
+
+set(_array_end "};\n\nconst size_t num_impersonations")
+string(FIND "${_source}" "${_array_end}" _array_end_index)
+if(_array_end_index EQUAL -1)
+  message(FATAL_ERROR "Could not find the impersonations array terminator")
+endif()
+string(SUBSTRING "${_source}" 0 ${_array_end_index} _array_contents)
+string(REGEX MATCH ",[ \t\r\n]*$" _has_trailing_comma "${_array_contents}")
+if(_has_trailing_comma)
+  set(_initializer_separator "\n")
+else()
+  set(_initializer_separator ",\n")
+endif()
+string(REPLACE
+  "${_array_end}"
+  "${_initializer_separator}${_initializers}};\n\nconst size_t num_impersonations"
+  _updated_source
+  "${_source}"
+)
+file(WRITE "${_impersonate_source}" "${_updated_source}")

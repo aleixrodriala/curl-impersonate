@@ -531,6 +531,48 @@ if(CURL_SUBPROJECT_FORCE_OPENSSL_PATHS)
 endif()
 
 _track_external_project_patch(curl _curl_patch_file _curl_patch_changed)
+set(CURL_IMPERSONATE_GENERATED_PROFILE_DIR
+  "${CMAKE_SOURCE_DIR}/profiles/generated"
+  CACHE PATH "Directory containing generated impersonation profile initializers"
+)
+get_filename_component(_generated_profile_dir
+  "${CURL_IMPERSONATE_GENERATED_PROFILE_DIR}"
+  ABSOLUTE
+  BASE_DIR "${CMAKE_SOURCE_DIR}"
+)
+file(GLOB _generated_profile_files CONFIGURE_DEPENDS
+  "${_generated_profile_dir}/*.inc"
+)
+set(_generated_profile_inject_script
+  "${CMAKE_SOURCE_DIR}/cmake/InjectImpersonationProfiles.cmake"
+)
+file(SHA256 "${_generated_profile_inject_script}"
+  _generated_profile_inject_script_sha256)
+set(_generated_profile_hash_input
+  "injector:${_generated_profile_inject_script_sha256}\n")
+foreach(_generated_profile IN LISTS _generated_profile_files)
+  file(SHA256 "${_generated_profile}" _generated_profile_sha256)
+  string(APPEND _generated_profile_hash_input
+    "${_generated_profile}:${_generated_profile_sha256}\n")
+endforeach()
+string(SHA256 _generated_profile_hash "${_generated_profile_hash_input}")
+set(_generated_profile_hash_file
+  "${CMAKE_BINARY_DIR}/curl-generated-profiles.sha256"
+)
+set(_generated_profiles_changed OFF)
+if(EXISTS "${_generated_profile_hash_file}")
+  file(READ "${_generated_profile_hash_file}" _previous_generated_profile_hash)
+  string(STRIP "${_previous_generated_profile_hash}"
+    _previous_generated_profile_hash)
+  if(NOT "${_previous_generated_profile_hash}" STREQUAL
+     "${_generated_profile_hash}")
+    set(_generated_profiles_changed ON)
+  endif()
+endif()
+file(WRITE "${_generated_profile_hash_file}" "${_generated_profile_hash}\n")
+if(_generated_profiles_changed AND NOT _curl_patch_changed)
+  _invalidate_external_project(curl "Generated impersonation profiles changed")
+endif()
 if(NOT _curl_patch_changed AND
    (_brotli_patch_changed OR _boringssl_patch_changed OR
     _nghttp3_patch_changed OR _ngtcp2_patch_changed))
@@ -544,7 +586,12 @@ ExternalProject_Add(curl
   SOURCE_DIR "${DEPS_SRC_DIR}/curl"
   BINARY_DIR "${DEPS_BUILD_DIR}/curl"
   INSTALL_DIR "${CMAKE_INSTALL_PREFIX}"
-  PATCH_COMMAND ${PATCH_EXE} -p1 -i "${_curl_patch_file}"
+  PATCH_COMMAND
+    ${PATCH_EXE} -p1 -i "${_curl_patch_file}"
+    COMMAND ${CMAKE_COMMAND}
+      "-DCURL_SOURCE_DIR=<SOURCE_DIR>"
+      "-DGENERATED_PROFILE_DIR=${_generated_profile_dir}"
+      -P "${_generated_profile_inject_script}"
   DEPENDS ${_curl_deps}
   CONFIGURE_COMMAND
     ${CMAKE_COMMAND} -E env
