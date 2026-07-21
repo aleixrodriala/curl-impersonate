@@ -1,0 +1,21 @@
+{
+  "browser_distribution": "consumer-chrome",
+  "capabilities": "capabilities.json",
+  "expected_release": {
+    "browser_distribution": "consumer-chrome",
+    "channel": "stable",
+    "platform": "mac_arm64",
+    "version": "151.0.7922.34"
+  },
+  "platform": "mac_arm64",
+  "profile": "profile.json",
+  "readiness": "readiness.json",
+  "redactions": [
+    "public source IP",
+    "TCP/IP metadata",
+    "TLS client random",
+    "TLS session id"
+  ],
+  "sample_count": 5,
+  "schema_version": 2
+}
