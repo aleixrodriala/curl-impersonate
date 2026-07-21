@@ -164,13 +164,55 @@ class AndroidChromeRunner:
 
     def _wait_for_debug_socket(self, timeout: int = 30) -> None:
         deadline = time.monotonic() + timeout
+        sockets = ""
         while time.monotonic() < deadline:
             sockets = self._adb("shell", "cat", "/proc/net/unix")
             if "@chrome_devtools_remote" in sockets:
                 return
             time.sleep(0.2)
+        diagnostics = []
+        commands = (
+            (
+                "adb_enabled",
+                ("shell", "settings", "get", "global", "adb_enabled"),
+            ),
+            (
+                "development_settings_enabled",
+                (
+                    "shell",
+                    "settings",
+                    "get",
+                    "global",
+                    "development_settings_enabled",
+                ),
+            ),
+            ("debug_app", ("shell", "settings", "get", "global", "debug_app")),
+            (
+                "command_line",
+                ("shell", "cat", "/data/local/tmp/chrome-command-line"),
+            ),
+            ("chrome_pid", ("shell", "pidof", self.package)),
+            ("activity", ("shell", "dumpsys", "activity", "top")),
+            (
+                "logcat",
+                ("logcat", "-d", "-t", "200", "chromium:V", "*:S"),
+            ),
+        )
+        for label, arguments in commands:
+            try:
+                value = self._adb(*arguments, timeout=10)
+            except (subprocess.SubprocessError, OSError) as exc:
+                value = f"<unavailable: {exc}>"
+            diagnostics.append(f"{label}: {value}")
+        devtools_sockets = [
+            line for line in sockets.splitlines() if "devtools" in line.lower()
+        ]
+        diagnostics.append(
+            "devtools_sockets: " + ("\n".join(devtools_sockets) or "<none>")
+        )
         raise AndroidChromeRunnerError(
-            f"Android Chrome did not expose CDP within {timeout} seconds"
+            f"Android Chrome did not expose CDP within {timeout} seconds\n"
+            + "\n".join(diagnostics)
         )
 
     @staticmethod
