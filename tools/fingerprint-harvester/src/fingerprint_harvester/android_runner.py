@@ -1,6 +1,5 @@
 import re
 import shutil
-import socket
 import subprocess
 import time
 from contextlib import suppress
@@ -21,30 +20,35 @@ class AndroidChromeRunnerError(RuntimeError):
     pass
 
 
-def _free_port() -> int:
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        return int(listener.getsockname()[1])
-
-
 class AndroidChromeRunner:
     def __init__(
         self,
         adb: Path | None = None,
+        serial: str | None = None,
+        user_id: int = 0,
         package: str = "com.android.chrome",
+        reset_profile: bool = True,
         connect_timeout_ms: int = 30_000,
     ) -> None:
         self.requested_adb = adb
+        self.serial = serial
+        self.user_id = user_id
         self.package = package
+        self.reset_profile = reset_profile
         self.connect_timeout_ms = connect_timeout_ms
         self.adb = ""
         self.package_version = ""
+        self._forwarded_ports: set[int] = set()
         self._playwright_manager: Any = None
         self._playwright: Any = None
 
     def _adb(self, *arguments: str, timeout: int = 30) -> str:
+        command = [self.adb]
+        if self.serial:
+            command.extend(("-s", self.serial))
+        command.extend(arguments)
         completed = subprocess.run(
-            [self.adb, *arguments],
+            command,
             check=True,
             capture_output=True,
             text=True,
@@ -63,10 +67,16 @@ class AndroidChromeRunner:
             for line in self._adb("devices").splitlines()[1:]
             if line.endswith("\tdevice")
         ]
-        if len(devices) != 1:
+        if self.serial and self.serial not in devices:
+            raise AndroidChromeRunnerError(
+                f"Requested Android device is not ready: {self.serial}"
+            )
+        if not self.serial and len(devices) != 1:
             raise AndroidChromeRunnerError(
                 f"Expected exactly one ready Android device, found {devices}"
             )
+        if not self.serial:
+            self.serial = devices[0]
         package_info = self._adb("shell", "dumpsys", "package", self.package)
         match = re.search(r"\bversionName=([^\s]+)", package_info)
         if match is None:
@@ -82,19 +92,29 @@ class AndroidChromeRunner:
             ) from exc
         self._playwright_manager = sync_playwright()
         self._playwright = self._playwright_manager.start()
-        self._enable_test_launch()
+        if self.reset_profile:
+            self._enable_test_launch()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         if self._playwright is not None:
             self._playwright.stop()
         if self.adb:
-            with suppress(Exception):
-                self._adb("forward", "--remove-all")
-            with suppress(Exception):
-                self._adb("shell", "am", "force-stop", self.package)
-            with suppress(Exception):
-                self._adb("shell", "am", "clear-debug-app")
+            for port in self._forwarded_ports:
+                with suppress(Exception):
+                    self._adb("forward", "--remove", f"tcp:{port}")
+            if self.reset_profile:
+                with suppress(Exception):
+                    self._adb(
+                        "shell",
+                        "am",
+                        "force-stop",
+                        "--user",
+                        str(self.user_id),
+                        self.package,
+                    )
+                with suppress(Exception):
+                    self._adb("shell", "am", "clear-debug-app")
         self._playwright = None
         self._playwright_manager = None
 
@@ -121,6 +141,8 @@ class AndroidChromeRunner:
             "shell",
             "am",
             "start",
+            "--user",
+            str(self.user_id),
             "-W",
             "-a",
             "android.intent.action.VIEW",
@@ -170,18 +192,36 @@ class AndroidChromeRunner:
             raise AndroidChromeRunnerError(
                 "AndroidChromeRunner must be used as a context manager"
             )
-        self._adb("shell", "am", "force-stop", self.package)
-        self._adb("shell", "pm", "clear", self.package)
-        self._enable_test_launch()
-        self._open_url(tls_url)
+        if self.reset_profile:
+            self._adb(
+                "shell",
+                "am",
+                "force-stop",
+                "--user",
+                str(self.user_id),
+                self.package,
+            )
+            self._adb(
+                "shell",
+                "pm",
+                "clear",
+                "--user",
+                str(self.user_id),
+                self.package,
+            )
+            self._enable_test_launch()
+            self._open_url(tls_url)
         self._wait_for_debug_socket()
-        port = _free_port()
-        self._adb(
-            "forward",
-            f"tcp:{port}",
-            "localabstract:chrome_devtools_remote",
+        port = int(
+            self._adb(
+                "forward",
+                "tcp:0",
+                "localabstract:chrome_devtools_remote",
+            )
         )
+        self._forwarded_ports.add(port)
         browser = None
+        capture_pages: list[Any] = []
         try:
             browser = self._playwright.chromium.connect_over_cdp(
                 f"http://127.0.0.1:{port}",
@@ -192,7 +232,12 @@ class AndroidChromeRunner:
             if not browser.contexts or not browser.contexts[0].pages:
                 raise AndroidChromeRunnerError("Android Chrome exposed no CDP page")
             context = browser.contexts[0]
-            page = self._wait_for_page(context, tls_url)
+            if self.reset_profile:
+                page = self._wait_for_page(context, tls_url)
+            else:
+                page = context.new_page()
+                capture_pages.append(page)
+                page.goto(tls_url, wait_until="domcontentloaded")
             tls_payload = _read_json_body(page)
             browser_data = {
                 "version": browser.version,
@@ -208,8 +253,13 @@ class AndroidChromeRunner:
 
             http3_payload = None
             for _ in range(6):
-                self._open_url(http3_url)
-                http3_page = self._wait_for_page(context, http3_url)
+                if self.reset_profile:
+                    self._open_url(http3_url)
+                    http3_page = self._wait_for_page(context, http3_url)
+                else:
+                    http3_page = context.new_page()
+                    capture_pages.append(http3_page)
+                    http3_page.goto(http3_url, wait_until="domcontentloaded")
                 try:
                     candidate = _read_json_body(http3_page)
                 except ChromeRunnerError:
@@ -231,7 +281,12 @@ class AndroidChromeRunner:
                     "mode": "headful",
                     "automation": "adb-cdp-attach",
                     "package": self.package,
-                    "collector_navigation": "android-view-intent",
+                    "collector_navigation": (
+                        "android-view-intent"
+                        if self.reset_profile
+                        else "playwright-cdp-page"
+                    ),
+                    "profile_reset": self.reset_profile,
                 },
                 "source_urls": {
                     "tls_http2": tls_url,
@@ -239,10 +294,22 @@ class AndroidChromeRunner:
                 },
             }
         finally:
+            for page in capture_pages:
+                with suppress(Exception):
+                    page.close()
             if browser is not None:
                 with suppress(Exception):
                     browser.close()
             with suppress(Exception):
                 self._adb("forward", "--remove", f"tcp:{port}")
-            with suppress(Exception):
-                self._adb("shell", "am", "force-stop", self.package)
+            self._forwarded_ports.discard(port)
+            if self.reset_profile:
+                with suppress(Exception):
+                    self._adb(
+                        "shell",
+                        "am",
+                        "force-stop",
+                        "--user",
+                        str(self.user_id),
+                        self.package,
+                    )

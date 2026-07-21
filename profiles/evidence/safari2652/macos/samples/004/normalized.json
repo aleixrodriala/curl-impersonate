@@ -1,0 +1,248 @@
+{
+  "browser": {
+    "browser_version": "26.5.2",
+    "build": "20624.2.5.18.7",
+    "language": "en-US",
+    "mode": "headful",
+    "platform": "MacIntel",
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Safari/605.1.15",
+    "user_agent_data": null,
+    "version": "26.5.2"
+  },
+  "tls_http2": {
+    "http2": {
+      "akamai_fingerprint": "2:0;3:100;4:2097152;9:1|10420225|0|m,s,a,p",
+      "akamai_fingerprint_hash": "c52879e43202aeb92740be6e8c86ea96",
+      "headers": {
+        "order": [
+          ":method",
+          ":scheme",
+          ":authority",
+          ":path",
+          "sec-fetch-dest",
+          "user-agent",
+          "accept",
+          "sec-fetch-site",
+          "sec-fetch-mode",
+          "accept-language",
+          "priority",
+          "accept-encoding"
+        ],
+        "values": [
+          {
+            "name": "sec-fetch-dest",
+            "value": "document"
+          },
+          {
+            "name": "user-agent",
+            "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Safari/605.1.15"
+          },
+          {
+            "name": "accept",
+            "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+          },
+          {
+            "name": "sec-fetch-site",
+            "value": "none"
+          },
+          {
+            "name": "sec-fetch-mode",
+            "value": "navigate"
+          },
+          {
+            "name": "accept-language",
+            "value": "en-US,en;q=0.9"
+          },
+          {
+            "name": "priority",
+            "value": "u=0, i"
+          },
+          {
+            "name": "accept-encoding",
+            "value": "gzip, deflate, br"
+          }
+        ]
+      },
+      "priority": {
+        "depends_on": 0,
+        "exclusive": 0,
+        "weight": 256
+      },
+      "pseudo_header_order": "m,s,a,p",
+      "settings": [
+        {
+          "name": "ENABLE_PUSH",
+          "value": 0
+        },
+        {
+          "name": "MAX_CONCURRENT_STREAMS",
+          "value": 100
+        },
+        {
+          "name": "INITIAL_WINDOW_SIZE",
+          "value": 2097152
+        },
+        {
+          "name": "NO_RFC7540_PRIORITIES",
+          "value": 1
+        }
+      ],
+      "window_update": 10420225
+    },
+    "protocol": "h2",
+    "tls": {
+      "ciphers": [
+        "GREASE",
+        "TLS_AES_128_GCM_SHA256",
+        "TLS_AES_256_GCM_SHA384",
+        "TLS_CHACHA20_POLY1305_SHA256",
+        "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+        "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+        "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+        "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+        "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+        "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+        "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
+        "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
+        "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+        "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
+        "TLS_RSA_WITH_AES_256_GCM_SHA384",
+        "TLS_RSA_WITH_AES_128_GCM_SHA256",
+        "TLS_RSA_WITH_AES_256_CBC_SHA",
+        "TLS_RSA_WITH_AES_128_CBC_SHA",
+        "TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA",
+        "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA",
+        "TLS_RSA_WITH_3DES_EDE_CBC_SHA"
+      ],
+      "extension_order": [
+        "GREASE",
+        0,
+        23,
+        65281,
+        10,
+        11,
+        16,
+        5,
+        13,
+        18,
+        51,
+        45,
+        43,
+        27,
+        "GREASE",
+        21
+      ],
+      "extensions": [
+        {
+          "id": 0,
+          "name": "server_name"
+        },
+        {
+          "id": 5,
+          "name": "status_request"
+        },
+        {
+          "groups": [
+            "GREASE",
+            "X25519",
+            "P-256",
+            "P-384",
+            "P-521"
+          ],
+          "id": 10,
+          "name": "supported_groups"
+        },
+        {
+          "id": 11,
+          "name": "ec_point_formats"
+        },
+        {
+          "algorithms": [
+            "ecdsa_secp256r1_sha256",
+            "rsa_pss_rsae_sha256",
+            "rsa_pkcs1_sha256",
+            "ecdsa_secp384r1_sha384",
+            "rsa_pss_rsae_sha384",
+            "rsa_pss_rsae_sha384",
+            "rsa_pkcs1_sha384",
+            "rsa_pss_rsae_sha512",
+            "rsa_pkcs1_sha512",
+            "rsa_pkcs1_sha1"
+          ],
+          "id": 13,
+          "name": "signature_algorithms"
+        },
+        {
+          "id": 16,
+          "name": "alpn",
+          "protocols": [
+            "h2",
+            "http/1.1"
+          ]
+        },
+        {
+          "id": 18,
+          "name": "signed_certificate_timestamp"
+        },
+        {
+          "id": 21,
+          "name": "padding"
+        },
+        {
+          "id": 23,
+          "name": "extended_master_secret"
+        },
+        {
+          "algorithms": [
+            "zlib"
+          ],
+          "id": 27,
+          "name": "compress_certificate"
+        },
+        {
+          "id": 43,
+          "name": "supported_versions",
+          "versions": [
+            "GREASE",
+            "TLS 1.3",
+            "TLS 1.2",
+            "TLS 1.1",
+            "TLS 1.0"
+          ]
+        },
+        {
+          "id": 45,
+          "mode": "PSK with (EC)DHE key establishment (psk_dhe_ke) (1)",
+          "name": "psk_key_exchange_modes"
+        },
+        {
+          "groups": [
+            "GREASE",
+            "X25519"
+          ],
+          "id": 51,
+          "name": "key_share"
+        },
+        {
+          "data": "00",
+          "id": 65281,
+          "name": "renegotiation_info"
+        },
+        {
+          "id": "GREASE",
+          "name": "GREASE"
+        },
+        {
+          "id": "GREASE",
+          "name": "GREASE"
+        }
+      ],
+      "ja4": "t13d2014h2_a09f3c656075_7f0f34a4126d",
+      "negotiated_version": "772",
+      "peetprint": "GREASE-772-771-770-769|2-1.1|GREASE-29-23-24-25|1027-2052-1025-1283-2053-2053-1281-2054-1537-513|1|1|GREASE-4865-4866-4867-49196-49195-52393-49200-49199-52392-49162-49161-49172-49171-157-156-53-47-49160-49170-10|0-10-11-13-16-18-21-23-27-43-45-5-51-65281-GREASE-GREASE",
+      "peetprint_hash": "fdf2c64009327d63a456cbab56a7bdde",
+      "record_version": "771"
+    },
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Safari/605.1.15"
+  }
+}

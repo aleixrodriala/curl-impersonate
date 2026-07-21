@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+"""Download Play-signed Chrome and its matching Trichrome library."""
+
+import argparse
+import json
+from pathlib import Path
+
+from gplaydl.api import get_delivery, get_details, purchase
+from gplaydl.auth import ensure_auth
+from gplaydl.download import DownloadSpec, download_batch
+
+
+CHROME_PACKAGE = "com.android.chrome"
+TRICHROME_PACKAGE = "com.google.android.trichromelibrary"
+
+
+def _delivery_specs(
+    package: str,
+    version_code: int,
+    output: Path,
+    prefix: str,
+    include_splits: bool,
+) -> list[DownloadSpec]:
+    delivery = get_delivery(package, version_code, ensure_auth("arm64"))
+    specs = [
+        DownloadSpec(
+            url=delivery.download_url,
+            dest=output / f"{prefix}-base.apk",
+            cookies=delivery.cookies,
+            label=f"{prefix}-base.apk",
+        )
+    ]
+    if include_splits:
+        specs.extend(
+            DownloadSpec(
+                url=split.url,
+                dest=output / f"{prefix}-{split.name}.apk",
+                label=f"{prefix}-{split.name}.apk",
+            )
+            for split in delivery.splits
+        )
+    return specs
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+
+    auth = ensure_auth("arm64")
+    if not auth:
+        raise RuntimeError("Google Play authentication is unavailable")
+    details = get_details(CHROME_PACKAGE, auth)
+    purchase(CHROME_PACKAGE, details.version_code, auth)
+
+    args.output.mkdir(parents=True, exist_ok=True)
+    specs = _delivery_specs(
+        TRICHROME_PACKAGE,
+        details.version_code,
+        args.output,
+        "trichrome",
+        include_splits=False,
+    )
+    specs.extend(
+        _delivery_specs(
+            CHROME_PACKAGE,
+            details.version_code,
+            args.output,
+            "chrome",
+            include_splits=True,
+        )
+    )
+    download_batch(specs)
+
+    metadata = {
+        "package": CHROME_PACKAGE,
+        "version": details.version_string,
+        "version_code": details.version_code,
+    }
+    (args.output / "metadata.json").write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps(metadata, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -146,7 +146,15 @@ def build_parser() -> argparse.ArgumentParser:
     android_capture.add_argument("--output", type=Path, required=True)
     android_capture.add_argument("--samples", type=int, default=5)
     android_capture.add_argument("--adb", type=Path)
+    android_capture.add_argument("--serial")
+    android_capture.add_argument("--android-user", type=int, default=0)
     android_capture.add_argument("--package", default="com.android.chrome")
+    android_capture.add_argument("--connect-timeout-ms", type=int, default=30_000)
+    android_capture.add_argument(
+        "--preserve-profile",
+        action="store_true",
+        help="Capture through a new CDP page without clearing browser data",
+    )
     android_capture.add_argument("--expected-version")
     android_capture.add_argument("--allow-version-mismatch", action="store_true")
     android_capture.add_argument("--tls-url", default=DEFAULT_TLS_URL)
@@ -573,7 +581,14 @@ def _handle_android_capture(args: argparse.Namespace) -> int:
     if args.samples < 3:
         raise ValueError("android-capture requires --samples of at least three")
     samples: list[dict[str, Any]] = []
-    with AndroidChromeRunner(adb=args.adb, package=args.package) as runner:
+    with AndroidChromeRunner(
+        adb=args.adb,
+        serial=args.serial,
+        user_id=args.android_user,
+        package=args.package,
+        reset_profile=not args.preserve_profile,
+        connect_timeout_ms=args.connect_timeout_ms,
+    ) as runner:
         for index in range(args.samples):
             print(
                 f"Capturing fresh Android Chrome profile {index + 1}/{args.samples}...",

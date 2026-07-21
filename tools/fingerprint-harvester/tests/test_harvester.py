@@ -981,6 +981,13 @@ def test_http2_only_safari_bundle_compiles_without_http3_options(tmp_path):
         sample["browser"]["version"] = "26.5.2"
         sample["browser"]["user_agent"] = "Safari test"
         sample["browser"]["platform"] = "MacIntel"
+        sample["tls_http2"]["tls"]["extensions"].insert(
+            -1,
+            {
+                "name": "supported_versions (43)",
+                "versions": ["TLS 1.3", "TLS 1.2", "TLS 1.1", "TLS 1.0"],
+            },
+        )
         sample["tls_http2"]["http2"]["sent_frames"][2].pop("priority")
     bundle = tmp_path / "safari"
     write_capture_bundle(
@@ -993,6 +1000,7 @@ def test_http2_only_safari_bundle_compiles_without_http3_options(tmp_path):
     candidate = candidate_from_bundle(bundle, "safari2652")
 
     assert candidate["browser"]["name"] == "safari"
+    assert candidate["options"]["ssl_version"]["min"] == "1.0"
     assert candidate["options"]["http2_no_priority"] is True
     assert "http3_settings" not in candidate["options"]
     assert "http3_tls_extension_order" not in candidate["options"]

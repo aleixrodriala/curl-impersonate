@@ -277,6 +277,22 @@ def _extension_values(
     return [str(item) for item in values if item != "GREASE"]
 
 
+def _minimum_tls_version(extensions: object) -> str:
+    supported = _extension_values(extensions, 43, "versions")
+    versions = {
+        "TLS 1.0": "1.0",
+        "TLS 1.1": "1.1",
+        "TLS 1.2": "1.2",
+        "TLS 1.3": "1.3",
+    }
+    available = [versions[item] for item in supported if item in versions]
+    return (
+        min(available, key=lambda item: tuple(map(int, item.split("."))))
+        if available
+        else "1.2"
+    )
+
+
 def _headers_as_lines(headers: object) -> list[str]:
     if not isinstance(headers, dict):
         return []
@@ -433,7 +449,10 @@ def candidate_from_bundle(bundle: Path, target: str) -> dict[str, Any]:
 
     options: dict[str, Any] = {
         "http_version": "2",
-        "ssl_version": {"min": "1.2", "max": "default"},
+        "ssl_version": {
+            "min": _minimum_tls_version(tcp_extensions),
+            "max": "default",
+        },
         "ciphers": [
             _native_cipher_name(cipher)
             for cipher in tcp_tls.get("ciphers", [])
@@ -455,6 +474,9 @@ def candidate_from_bundle(bundle: Path, target: str) -> dict[str, Any]:
             _extension_values(tcp_extensions, 27, "algorithms") or [None]
         )[0],
         "http_headers": _headers_as_lines(http2.get("headers")),
+        "http2_pseudo_headers_order": str(http2.get("pseudo_header_order", "")).replace(
+            ",", ""
+        ),
         "http2_settings": _http2_settings(http2.get("settings")),
         "http2_window_update": http2.get("window_update", 0),
         "http2_stream_weight": priority.get("weight", 0),
