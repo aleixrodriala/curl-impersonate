@@ -42,7 +42,7 @@ def _fetch_x86_64_token(dispenser_url: str | None = None) -> dict | None:
             "User-Agent": "com.aurora.store-4.6.1-70",
             "Content-Type": "application/json",
         },
-        timeout=30,
+        timeout=15,
     )
     if response.status_code != 200:
         return None
