@@ -18,15 +18,15 @@ def build_x86_64_profile() -> dict[str, str]:
             "UserReadableName": "Android SDK x86_64",
             "Build.HARDWARE": "ranchu",
             "Build.FINGERPRINT": (
-                "google/sdk_gphone64_x86_64/emu64xa:16/"
-                "BP2A.250705.008/13562796:user/release-keys"
+                "google/sdk_gphone64_x86_64/emu64xa:15/"
+                "AE3A.240806.042/12529570:user/release-keys"
             ),
             "Build.DEVICE": "emu64xa",
-            "Build.VERSION.SDK_INT": "36",
-            "Build.VERSION.RELEASE": "16",
+            "Build.VERSION.SDK_INT": "35",
+            "Build.VERSION.RELEASE": "15",
             "Build.MODEL": "sdk_gphone64_x86_64",
             "Build.PRODUCT": "sdk_gphone64_x86_64",
-            "Build.ID": "BP2A.250705.008",
+            "Build.ID": "AE3A.240806.042",
             "Build.SUPPORTED_ABIS": "x86_64,x86",
             "Platforms": "x86_64,x86",
         }

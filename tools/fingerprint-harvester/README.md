@@ -125,10 +125,10 @@ uv run --project tools/fingerprint-harvester \
 
 The hosted workflow downloads Chrome and its exact-version Trichrome shared
 library directly from Google Play, verifies their signatures, installs them on
-an x86_64 Android emulator with KVM acceleration, and deletes the proprietary
-packages with the ephemeral runner. Only sanitized fingerprint evidence is
-uploaded. The Play device profile explicitly requests Google's x86_64 package
-variant, so no ARM translation layer is involved.
+an x86_64 Android 15 Play Store emulator with KVM acceleration, and deletes the
+proprietary packages with the ephemeral runner. Only sanitized fingerprint
+evidence is uploaded. The Play device profile explicitly requests Google's
+x86_64 package variant, so no ARM translation layer is involved.
 
 ## Bundle contract
 
