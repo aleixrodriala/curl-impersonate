@@ -177,10 +177,26 @@ jobs:
           fi
 
           target="chrome${majors[0]}"
-          if [[ -f "profiles/chrome/${target}.json" ]]; then
-            echo "Declarative profile ${target} already exists."
+          targets=(
+            "$target"
+            "${target}_linux"
+            "${target}_windows"
+            "${target}_macos"
+          )
+          existing=0
+          for candidate in "${targets[@]}"; do
+            if [[ -f "profiles/chrome/${candidate}.json" ]]; then
+              existing=$((existing + 1))
+            fi
+          done
+          if [[ $existing -eq ${#targets[@]} ]]; then
+            echo "Declarative OS profiles for ${target} already exist."
             echo "propose=false" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+          if [[ $existing -ne 0 ]]; then
+            echo "Refusing to overwrite a partial ${target} OS profile set." >&2
+            exit 1
           fi
 
           retained="profiles/evidence/${target}"
@@ -198,20 +214,25 @@ jobs:
               "$reference" "$retained/$platform"
           done
 
-          uv run --project tools/fingerprint-harvester \
-            curl-impersonate-harvest candidate \
-            "$reference" \
-            --target "$target" \
-            --output "profiles/chrome/${target}.json"
-          uv run --project tools/fingerprint-harvester \
-            curl-impersonate-harvest render \
-            "profiles/chrome/${target}.json" \
-            --output "profiles/generated/${target}.inc"
+          bundles=(mac linux win64 mac)
+          for index in "${!targets[@]}"; do
+            candidate="${targets[$index]}"
+            bundle="${bundles[$index]}"
+            uv run --project tools/fingerprint-harvester \
+              curl-impersonate-harvest candidate \
+              "$retained/$bundle" \
+              --target "$candidate" \
+              --output "profiles/chrome/${candidate}.json"
+            uv run --project tools/fingerprint-harvester \
+              curl-impersonate-harvest render \
+              "profiles/chrome/${candidate}.json" \
+              --output "profiles/generated/${candidate}.inc"
+          done
 
           echo "propose=true" >> "$GITHUB_OUTPUT"
           echo "target=$target" >> "$GITHUB_OUTPUT"
 
-      - name: Build and replay native candidate
+      - name: Build and replay native OS candidates
         if: steps.candidate.outputs.propose == 'true'
         env:
           TARGET: ${{ steps.candidate.outputs.target }}
@@ -220,13 +241,24 @@ jobs:
           make prepare-libidn2 BUILD_DIR=build JOBS=4
           make build BUILD_DIR=build JOBS=4
           make checkbuild BUILD_DIR=build
-          uv run --project tools/fingerprint-harvester \
-            curl-impersonate-harvest replay \
-            "profiles/evidence/${TARGET}/mac" \
-            --curl-binary build/deps/build/curl/src/curl-impersonate \
-            --target "$TARGET" \
-            --samples 3 \
-            --output "${RUNNER_TEMP}/replay/${TARGET}"
+          targets=(
+            "$TARGET"
+            "${TARGET}_linux"
+            "${TARGET}_windows"
+            "${TARGET}_macos"
+          )
+          bundles=(mac linux win64 mac)
+          for index in "${!targets[@]}"; do
+            candidate="${targets[$index]}"
+            bundle="${bundles[$index]}"
+            uv run --project tools/fingerprint-harvester \
+              curl-impersonate-harvest replay \
+              "profiles/evidence/${TARGET}/$bundle" \
+              --curl-binary build/deps/build/curl/src/curl-impersonate \
+              --target "$candidate" \
+              --samples 3 \
+              --output "${RUNNER_TEMP}/replay/${candidate}"
+          done
 
       - name: Commit verified profile to the fork
         if: steps.candidate.outputs.propose == 'true'
@@ -237,5 +269,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add profiles
-          git commit -m "Add ${TARGET} fingerprint profile"
+          git commit -m "Add ${TARGET} OS fingerprint profiles"
           git push origin "HEAD:${GITHUB_REF_NAME}"

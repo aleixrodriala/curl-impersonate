@@ -33,3 +33,8 @@ replace a target already supplied by that patch.
 Readiness also rejects Chrome behavior that the current native connection paths
 cannot express independently. A generated profile is published only after a
 native build and replay match the retained browser evidence.
+
+Desktop Chrome majors expose explicit `_linux`, `_windows`, and `_macos`
+targets because their default headers and client hints differ even when their
+TLS, HTTP/2, HTTP/3, and QUIC transport behavior is identical. The unsuffixed
+target is retained as the macOS-compatible default.

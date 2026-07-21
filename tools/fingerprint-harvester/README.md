@@ -164,11 +164,13 @@ dispatch. It:
 2. Waits until the installed consumer Stable binaries reach the same major on
    all four platforms.
 3. Requires matching OS-independent transport semantics.
-4. Retains sanitized evidence and generates the declarative profile plus C
-   initializer.
-5. Builds the injected native target and replays it through both collectors.
-6. Commits the verified profile directly to the workflow's branch in the fork
-   only after replay matches.
+4. Retains sanitized evidence and generates Linux, Windows, and macOS
+   declarative profiles plus C initializers. The unsuffixed target remains the
+   macOS-compatible default.
+5. Builds every injected native target and replays each one through both
+   collectors against its matching OS evidence.
+6. Commits the verified profile set directly to the workflow's branch in the
+   fork only after every replay matches.
 
 The workflow needs `contents: write` permission. Google's announcement feed and
 signed Stable downloads can advance at different times, so the workflow records
