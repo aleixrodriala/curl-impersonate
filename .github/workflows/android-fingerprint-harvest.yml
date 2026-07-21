@@ -123,7 +123,7 @@ jobs:
             -noaudio -no-boot-anim -no-metrics
           disable-animations: true
           script: |
-            for apk in "${RUNNER_TEMP}"/chrome-apks/*.apk; do apksigner verify --print-certs "$apk"; done
+            for apk in "${RUNNER_TEMP}"/chrome-apks/*.apk; do "${ANDROID_HOME}/build-tools/37.0.0/apksigner" verify --print-certs "$apk"; done
             adb install -r "${RUNNER_TEMP}/chrome-apks/trichrome-base.apk"
             adb install-multiple -r "${RUNNER_TEMP}"/chrome-apks/chrome-*.apk
             adb shell dumpsys package com.android.chrome | grep -E 'versionName=|versionCode=' | head -2
