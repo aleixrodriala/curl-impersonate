@@ -161,20 +161,23 @@ dispatch. It:
 
 1. Captures headful consumer Chrome on Linux, Windows, macOS Intel, and macOS
    ARM.
-2. Waits until consumer Stable reaches the same major on all four platforms.
+2. Waits until the installed consumer Stable binaries reach the same major on
+   all four platforms.
 3. Requires matching OS-independent transport semantics.
 4. Retains sanitized evidence and generates the declarative profile plus C
    initializer.
 5. Builds the injected native target and replays it through both collectors.
-6. Opens a draft PR on an automation/fingerprint-chromeVERSION branch only
-   after replay matches.
+6. Commits the verified profile directly to the workflow's branch in the fork
+   only after replay matches.
 
-The repository must allow GitHub Actions to create pull requests. Hosted-runner
-images can lag Chrome rollout; exact version mismatch safely prevents proposal
-generation and a later scheduled run retries. Sanitized run artifacts expire
-after seven days; evidence for a verified candidate is retained in its draft PR.
+The workflow needs `contents: write` permission. Google's announcement feed and
+signed Stable downloads can advance at different times, so the workflow records
+both and treats the installed consumer binary as capture truth. A candidate is
+generated only when the actual major converges on every OS. Sanitized run
+artifacts expire after seven days; evidence for a verified candidate is retained
+in the profile commit.
 
-The workflow intentionally does not merge, tag, or release.
+The workflow intentionally does not tag or release.
 
 ## Browser and collector behavior
 

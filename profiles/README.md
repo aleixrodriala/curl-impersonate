@@ -31,5 +31,5 @@ the maintained curl patch. Generated target names must be unique and cannot
 replace a target already supplied by that patch.
 
 Readiness also rejects Chrome behavior that the current native connection paths
-cannot express independently. A generated profile is proposed only after a
+cannot express independently. A generated profile is published only after a
 native build and replay match the retained browser evidence.

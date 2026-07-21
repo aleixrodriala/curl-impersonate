@@ -113,14 +113,13 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  propose:
-    name: Propose a native Chrome profile
+  publish:
+    name: Publish a native Chrome profile
     needs: capture
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -229,27 +228,14 @@ jobs:
             --samples 3 \
             --output "${RUNNER_TEMP}/replay/${TARGET}"
 
-      - name: Open draft profile PR
+      - name: Commit verified profile to the fork
         if: steps.candidate.outputs.propose == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
           TARGET: ${{ steps.candidate.outputs.target }}
         run: |
           set -euo pipefail
-          branch="automation/fingerprint-${TARGET}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin "$branch:refs/remotes/origin/$branch" || true
-          git switch -C "$branch"
           git add profiles
-          git commit -m "Add ${TARGET} fingerprint candidate"
-          git push --force-with-lease origin "HEAD:${branch}"
-
-          if [[ -z "$(gh pr list --head "$branch" --json number --jq '.[0].number')" ]]; then
-            gh pr create \
-              --base main \
-              --head "$branch" \
-              --draft \
-              --title "Add ${TARGET} fingerprint candidate" \
-              --body "Automated consumer-Chrome capture and generated native initializer. Transport semantics matched Linux, Windows, macOS Intel, and macOS ARM. The superbuild injected the initializer, the native build passed, and replay matched the retained Chrome evidence. Manual review is still required before merge."
-          fi
+          git commit -m "Add ${TARGET} fingerprint profile"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
