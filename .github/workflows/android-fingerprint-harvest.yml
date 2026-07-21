@@ -104,10 +104,11 @@ jobs:
             --arch x86_64 \
             --output "${RUNNER_TEMP}/chrome-apks"
 
-      - name: Enable KVM
+      - name: Prepare KVM and ADB
         run: |
           test -c /dev/kvm
           sudo chmod 0666 /dev/kvm
+          adb start-server
 
       - name: Capture fresh Android Chrome profiles
         uses: reactivecircus/android-emulator-runner@v2
