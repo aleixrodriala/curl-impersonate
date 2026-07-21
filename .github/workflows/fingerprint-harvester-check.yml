@@ -49,8 +49,15 @@ jobs:
           shopt -s nullglob
           for initializer in profiles/generated/*.inc; do
             target="$(basename "$initializer" .inc)"
-            profile="profiles/chrome/${target}.json"
-            test -f "$profile"
+            profile=""
+            for family in chrome safari; do
+              candidate="profiles/${family}/${target}.json"
+              if test -f "$candidate"; then
+                test -z "$profile"
+                profile="$candidate"
+              fi
+            done
+            test -n "$profile"
             uv run --project tools/fingerprint-harvester \
               curl-impersonate-harvest render "$profile" |
               diff -u "$initializer" -
