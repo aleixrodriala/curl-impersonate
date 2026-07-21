@@ -31,19 +31,37 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Select Xcode and boot iOS 26.5 Simulator
+      - name: Select Xcode and boot the latest iOS Simulator
         if: matrix.platform == 'ios'
         run: |
           set -euo pipefail
-          sudo xcode-select --switch /Applications/Xcode_26.6.app
+          xcode_path="$(python - <<'PY'
+          from pathlib import Path
+
+          def version(path):
+              return tuple(int(item) for item in path.stem.removeprefix("Xcode_").split("."))
+
+          print(max(Path("/Applications").glob("Xcode_*.app"), key=version))
+          PY
+          )"
+          sudo xcode-select --switch "$xcode_path"
+          ios_version="$(
+            xcrun simctl list runtimes available --json |
+              jq -er '
+                [.runtimes[] | select(.identifier | contains("iOS"))]
+                | sort_by(.version | split(".") | map(tonumber))
+                | last.version
+              '
+          )"
           device_udid="$(
-            xcrun simctl list devices 'iOS 26.5' available --json |
+            xcrun simctl list devices "iOS ${ios_version}" available --json |
               jq -er '[.devices[][] | select(.name == "iPhone 17")][0].udid'
           )"
           xcrun simctl boot "$device_udid" || true
           open -a Simulator --args -CurrentDeviceUDID "$device_udid"
           xcrun simctl bootstatus "$device_udid" -b
           echo "IOS_DEVICE_UDID=$device_udid" >> "$GITHUB_ENV"
+          echo "IOS_RUNTIME_VERSION=$ios_version" >> "$GITHUB_ENV"
 
       - name: Enable Safari WebDriver
         run: sudo safaridriver --enable
@@ -68,7 +86,7 @@ jobs:
           uv run --project tools/fingerprint-harvester \
             curl-impersonate-harvest safari-capture \
             --platform ios \
-            --ios-version 26.5 \
+            --ios-version "$IOS_RUNTIME_VERSION" \
             --ios-device-name "iPhone 17" \
             --ios-device-udid "$IOS_DEVICE_UDID" \
             --samples 5 \
@@ -82,3 +100,120 @@ jobs:
           path: ${{ runner.temp }}/fingerprint-harvester
           if-no-files-found: error
           retention-days: 7
+
+  publish:
+    name: Publish native Safari profiles
+    needs: capture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install harvester and native build dependencies
+        run: |
+          python -m pip install uv
+          uv sync --project tools/fingerprint-harvester
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf automake build-essential cmake curl gperf libtool \
+            ninja-build pkg-config
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: safari-*
+          path: ${{ runner.temp }}/fingerprint-evidence
+          merge-multiple: true
+
+      - name: Prepare candidates and retained evidence
+        id: candidate
+        run: |
+          set -euo pipefail
+          targets_file="${RUNNER_TEMP}/safari-targets"
+          : > "$targets_file"
+          mapfile -t manifests < <(
+            find "${RUNNER_TEMP}/fingerprint-evidence" \
+              -name manifest.json -print
+          )
+          if [[ ${#manifests[@]} -ne 2 ]]; then
+            echo "Expected two Safari manifests, found ${#manifests[@]}" >&2
+            exit 1
+          fi
+
+          for manifest in "${manifests[@]}"; do
+            bundle="$(dirname "$manifest")"
+            platform="$(jq -er '.platform' "$manifest")"
+            version="$(
+              jq -er '
+                .browser_identities
+                | map(.version)
+                | unique
+                | if length == 1 then .[0]
+                  else error("capture has inconsistent Safari versions")
+                  end
+              ' "$bundle/profile.json"
+            )"
+            digits="${version//./}"
+            target="safari${digits}"
+            if [[ "$platform" == ios ]]; then
+              target="${target}_ios"
+            fi
+            if [[ -f "profiles/safari/${target}.json" ]]; then
+              echo "Declarative profile ${target} already exists."
+              continue
+            fi
+
+            retained="profiles/evidence/${target}"
+            cp -R "$bundle" "$retained"
+            uv run --project tools/fingerprint-harvester \
+              curl-impersonate-harvest candidate \
+              "$retained" \
+              --target "$target" \
+              --output "profiles/safari/${target}.json"
+            uv run --project tools/fingerprint-harvester \
+              curl-impersonate-harvest render \
+              "profiles/safari/${target}.json" \
+              --output "profiles/generated/${target}.inc"
+            printf '%s\n' "$target" >> "$targets_file"
+          done
+
+          if [[ -s "$targets_file" ]]; then
+            echo "propose=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "propose=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and replay native candidates
+        if: steps.candidate.outputs.propose == 'true'
+        run: |
+          set -euo pipefail
+          make prepare-libidn2 BUILD_DIR=build JOBS=4
+          make build BUILD_DIR=build JOBS=4
+          make checkbuild BUILD_DIR=build
+          while IFS= read -r target; do
+            uv run --project tools/fingerprint-harvester \
+              curl-impersonate-harvest replay \
+              "profiles/evidence/${target}" \
+              --curl-binary build/deps/build/curl/src/curl-impersonate \
+              --target "$target" \
+              --samples 3 \
+              --output "${RUNNER_TEMP}/replay/${target}"
+          done < "${RUNNER_TEMP}/safari-targets"
+
+      - name: Commit verified profiles to the fork
+        if: steps.candidate.outputs.propose == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          git add profiles
+          git commit -m "Add current Safari fingerprint profiles"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
