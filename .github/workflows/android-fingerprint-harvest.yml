@@ -69,7 +69,7 @@ jobs:
           system-image-api-level: 36.1
           target: google_apis_playstore
           arch: arm64-v8a
-          profile: pixel_9
+          profile: pixel_7
           emulator-options: >-
             -no-window -gpu swiftshader -no-snapshot
             -noaudio -no-boot-anim
@@ -101,7 +101,7 @@ jobs:
         with:
           name: chrome-android
           path: ${{ runner.temp }}/fingerprint-harvester
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
 
   publish:

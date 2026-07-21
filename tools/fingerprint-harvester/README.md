@@ -1,7 +1,7 @@
-# Chrome fingerprint harvester
+# Browser fingerprint harvester
 
-This standalone developer tool captures consumer Google Chrome TLS, HTTP/2,
-HTTP/3, QUIC, and navigation-header behavior. It normalizes connection
+This standalone developer tool captures consumer Chrome and Safari TLS,
+HTTP/2, HTTP/3, QUIC, and navigation-header behavior. It normalizes connection
 randomness, validates whether the native fork can represent every observed
 field, and compiles ready evidence into a declarative native profile.
 
@@ -89,6 +89,45 @@ uv run --project tools/fingerprint-harvester \
 
 Chrome-for-Testing bundles always report ready: false.
 
+## Safari capture
+
+Use the platform SafariDriver rather than substituting Chromium. A fresh
+WebDriver session is created for every sample:
+
+~~~sh
+uv run --project tools/fingerprint-harvester \
+  curl-impersonate-harvest safari-capture \
+  --platform macos \
+  --samples 5 \
+  --output captures/safari-macos
+~~~
+
+The `ios` platform uses an explicitly booted iOS Simulator and accepts its
+device name, UDID, and runtime version as command-line options. Safari may be
+HTTP/2-only at the collectors; absence of HTTP/3 is retained as evidence rather
+than synthesized.
+
+## Android Chrome capture
+
+Android capture attaches Playwright as a CDP client to the installed
+`com.android.chrome` package. Canonical captures clear a dedicated emulator
+profile before every sample. ``--preserve-profile`` is available for safe
+diagnostics on a personal device but is not compilation-ready when connection
+state produces more than one variant.
+
+~~~sh
+uv run --project tools/fingerprint-harvester \
+  curl-impersonate-harvest android-capture \
+  --serial emulator-5554 \
+  --samples 5 \
+  --output captures/chrome-android
+~~~
+
+The hosted workflow downloads Chrome and its exact-version Trichrome shared
+library directly from Google Play, verifies their signatures, installs them on
+an ARM64 Android emulator, and deletes the proprietary packages with the
+ephemeral runner. Only sanitized fingerprint evidence is uploaded.
+
 ## Bundle contract
 
 Each bundle is created atomically and is never overwritten:
@@ -156,8 +195,7 @@ uv run --project tools/fingerprint-harvester \
 
 ## Scheduled deployment
 
-.github/workflows/fingerprint-harvest.yml runs every six hours and on manual
-dispatch. It:
+`fingerprint-harvest.yml` runs every six hours and on manual dispatch. It:
 
 1. Captures headful consumer Chrome on Linux, Windows, macOS Intel, and macOS
    ARM.
@@ -180,6 +218,13 @@ artifacts expire after seven days; evidence for a verified candidate is retained
 in the profile commit.
 
 The workflow intentionally does not tag or release.
+
+`safari-fingerprint-harvest.yml` uses GitHub-hosted macOS and iOS Simulator
+runners. `android-fingerprint-harvest.yml` uses the ARM64 `macos-15` runner
+so Play-delivered ARM64 Chrome executes without native-code translation. The
+Android workflow first attempts anonymous Play authentication and also accepts
+an encrypted `GPLAY_AUTH_B64` token or `GPLAY_DISPENSER_URL` secret. It
+never stores APKs in artifacts, commits, or releases.
 
 ## Browser and collector behavior
 

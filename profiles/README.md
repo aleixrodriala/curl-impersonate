@@ -23,7 +23,7 @@ uv run --project tools/fingerprint-harvester \
 
 `chrome146.json` is a legacy import that must render exactly to the existing
 initializer in `patches/curl.patch`. New profiles must point to a retained
-consumer-Chrome capture bundle and pass native replay verification before
+consumer-browser capture bundle and pass native replay verification before
 release.
 
 The CMake superbuild injects all `profiles/generated/*.inc` files after applying

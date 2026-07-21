@@ -95,6 +95,9 @@ The following browsers can be impersonated. For a full list of browser profiles,
 | ![Chrome](https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome_24x24.png "Chrome") | 142 | macOS Tahoe | `chrome142` | [curl_chrome142](bin/curl_chrome142) |
 | ![Chrome](https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome_24x24.png "Chrome") | 145 | macOS Tahoe | `chrome145` | [curl_chrome145](bin/curl_chrome145) | ✅ |
 | ![Chrome](https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome_24x24.png "Chrome") | 146 | macOS Tahoe | `chrome146` | [curl_chrome146](bin/curl_chrome146) | ✅ |
+| ![Chrome](https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome_24x24.png "Chrome") | 150 | Linux | `chrome150_linux` | — | ✅ |
+| ![Chrome](https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome_24x24.png "Chrome") | 150 | Windows 10 | `chrome150_windows` | — | ✅ |
+| ![Chrome](https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome_24x24.png "Chrome") | 150 | macOS Tahoe | `chrome150` / `chrome150_macos` | — | ✅ |
 | ![Chrome](https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome_24x24.png "Chrome") | 99 | Android 12 | `chrome99_android` | [curl_chrome99_android](bin/curl_chrome99_android) |
 | ![Chrome](https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome_24x24.png "Chrome") | 131 | Android 14 | `chrome131_android` | [curl_chrome131_android](bin/curl_chrome131_android) |
 | ![Edge](https://raw.githubusercontent.com/alrra/browser-logos/main/src/edge/edge_24x24.png "Edge") | 99 | Windows 10 | `edge99` | [curl_edge99](bin/curl_edge99) |
@@ -110,6 +113,8 @@ The following browsers can be impersonated. For a full list of browser profiles,
 | ![Safari](https://github.com/alrra/browser-logos/blob/main/src/safari/safari_24x24.png "Safari") | 26.0 | macOS Tahoe | `safari260` | [curl_safari260](bin/curl_safari260) |
 | ![Safari](https://github.com/alrra/browser-logos/blob/main/src/safari/safari_24x24.png "Safari") | 26.0 | iOS 26.0 | `safari260_ios` | [curl_safari260_ios](bin/curl_safari260_ios) |
 | ![Safari](https://github.com/alrra/browser-logos/blob/main/src/safari/safari_24x24.png "Safari") | 26.0.1 | macOS Tahoe | `safari2601` | [curl_safari2601](bin/curl_safari2601) |
+| ![Safari](https://github.com/alrra/browser-logos/blob/main/src/safari/safari_24x24.png "Safari") | 26.5.2 | macOS Sequoia | `safari2652` | — |
+| ![Safari](https://github.com/alrra/browser-logos/blob/main/src/safari/safari_24x24.png "Safari") | 26.5 | iOS 26.5 Simulator | `safari265_ios` | — |
 | ![Firefox](https://github.com/alrra/browser-logos/blob/main/src/firefox/firefox_24x24.png "Firefox") | 133.0 | macOS Sonoma | `firefox133` | [curl_firefox133](bin/curl_firefox133) |
 | ![Firefox](https://github.com/alrra/browser-logos/blob/main/src/firefox/firefox_24x24.png "Firefox") | 135.0 | macOS Sonoma | `firefox135` | [curl_firefox135](bin/curl_firefox135) |
 | ![Firefox](https://github.com/alrra/browser-logos/blob/main/src/firefox/firefox_24x24.png "Firefox") | 144.0 | macOS Tahoe | `firefox144` | [curl_firefox144](bin/curl_firefox144) |
