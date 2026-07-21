@@ -63,7 +63,7 @@ SUPPORTED_GROUPS = {
     "P-521",
 }
 
-SUPPORTED_CERT_COMPRESSION = {"brotli"}
+SUPPORTED_CERT_COMPRESSION = {"brotli", "zlib"}
 
 SUPPORTED_CIPHERS = {
     "TLS_AES_128_GCM_SHA256",
@@ -422,24 +422,15 @@ def analyze_capabilities(profile: dict[str, Any]) -> list[CapabilityGap]:
         "fingerprint.tls_http2",
         "TLS/HTTP2 fingerprint",
     )
-    http3, section_gaps = _require_mapping(
-        fingerprint.get("http3"),
-        "fingerprint.http3",
-        "HTTP/3 fingerprint",
-    )
-    gaps.extend(section_gaps)
+    http3_value = fingerprint.get("http3")
+    http3 = http3_value if isinstance(http3_value, dict) else None
     tcp_tls = tls_http2.get("tls")
-    quic_tls = http3.get("tls")
     tcp_tls = tcp_tls if isinstance(tcp_tls, dict) else {}
-    quic_tls = quic_tls if isinstance(quic_tls, dict) else {}
 
     gaps.extend(
         _extension_gaps(
             tcp_tls.get("extensions"), "fingerprint.tls_http2.tls.extensions"
         )
-    )
-    gaps.extend(
-        _extension_gaps(quic_tls.get("extensions"), "fingerprint.http3.tls.extensions")
     )
     gaps.extend(
         _order_gaps(
@@ -449,14 +440,6 @@ def analyze_capabilities(profile: dict[str, Any]) -> list[CapabilityGap]:
         )
     )
     gaps.extend(_native_protocol_gaps(tcp_tls))
-    gaps.extend(_protocol_order_gaps(tcp_tls, quic_tls))
-    gaps.extend(
-        _order_gaps(
-            quic_tls.get("extension_order"),
-            "fingerprint.http3.tls.extension_order",
-            "QUIC TLS extension order",
-        )
-    )
     ciphers = tcp_tls.get("ciphers")
     if not isinstance(ciphers, list) or not ciphers:
         gaps.append(
@@ -483,14 +466,30 @@ def analyze_capabilities(profile: dict[str, Any]) -> list[CapabilityGap]:
         "HTTP/2 fingerprint",
     )
     gaps.extend(section_gaps)
-    normalized_http3, section_gaps = _require_mapping(
-        http3.get("http3"),
-        "fingerprint.http3.http3",
-        "HTTP/3 fingerprint",
-    )
-    gaps.extend(section_gaps)
     gaps.extend(_http2_gaps(normalized_http2, "fingerprint.tls_http2.http2"))
-    gaps.extend(_http3_gaps(normalized_http3, quic_tls))
+    if http3 is not None:
+        quic_tls = http3.get("tls")
+        quic_tls = quic_tls if isinstance(quic_tls, dict) else {}
+        gaps.extend(
+            _extension_gaps(
+                quic_tls.get("extensions"), "fingerprint.http3.tls.extensions"
+            )
+        )
+        gaps.extend(_protocol_order_gaps(tcp_tls, quic_tls))
+        gaps.extend(
+            _order_gaps(
+                quic_tls.get("extension_order"),
+                "fingerprint.http3.tls.extension_order",
+                "QUIC TLS extension order",
+            )
+        )
+        normalized_http3, section_gaps = _require_mapping(
+            http3.get("http3"),
+            "fingerprint.http3.http3",
+            "HTTP/3 fingerprint",
+        )
+        gaps.extend(section_gaps)
+        gaps.extend(_http3_gaps(normalized_http3, quic_tls))
 
     unique: dict[tuple[str, str], CapabilityGap] = {}
     for gap in gaps:

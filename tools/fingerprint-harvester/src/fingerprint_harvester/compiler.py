@@ -416,24 +416,17 @@ def candidate_from_bundle(bundle: Path, target: str) -> dict[str, Any]:
 
     tcp = fingerprint.get("tls_http2")
     h3 = fingerprint.get("http3")
-    if not isinstance(tcp, dict) or not isinstance(h3, dict):
-        raise ValueError("capture bundle has incomplete protocol fingerprints")
+    if not isinstance(tcp, dict):
+        raise ValueError("capture bundle has no TLS/HTTP2 fingerprint")
     tcp_tls = tcp.get("tls")
-    h3_tls = h3.get("tls")
     http2 = tcp.get("http2")
-    http3 = h3.get("http3")
-    if not all(isinstance(item, dict) for item in (tcp_tls, h3_tls, http2, http3)):
-        raise ValueError("capture bundle has incomplete normalized sections")
+    if not all(isinstance(item, dict) for item in (tcp_tls, http2)):
+        raise ValueError("capture bundle has incomplete TLS/HTTP2 sections")
     assert isinstance(tcp_tls, dict)
-    assert isinstance(h3_tls, dict)
     assert isinstance(http2, dict)
-    assert isinstance(http3, dict)
 
     tcp_extensions = tcp_tls.get("extensions")
-    h3_extensions = h3_tls.get("extensions")
     tcp_order = tcp_tls.get("extension_order")
-    h3_order = h3_tls.get("extension_order")
-    transport = _find_extension(h3_extensions, 57)
     priority = http2.get("priority")
     priority = priority if isinstance(priority, dict) else {}
     tcp_order_mode = tcp_order.get("mode") if isinstance(tcp_order, dict) else None
@@ -450,9 +443,6 @@ def candidate_from_bundle(bundle: Path, target: str) -> dict[str, Any]:
         "signature_algorithms": _native_signature_names(
             _extension_values(tcp_extensions, 13, "algorithms")
         ),
-        "http3_signature_algorithms": _native_signature_names(
-            _extension_values(h3_extensions, 13, "algorithms")
-        ),
         "npn": False,
         "alpn": _extension_present(tcp_extensions, 16),
         "alps": any(
@@ -460,7 +450,7 @@ def candidate_from_bundle(bundle: Path, target: str) -> dict[str, Any]:
             for extension_id in (17513, 17613)
         ),
         "tls_permute_extensions": tcp_order_mode == "permuted",
-        "tls_session_ticket": True,
+        "tls_session_ticket": _extension_present(tcp_extensions, 35),
         "cert_compression": (
             _extension_values(tcp_extensions, 27, "algorithms") or [None]
         )[0],
@@ -469,20 +459,6 @@ def candidate_from_bundle(bundle: Path, target: str) -> dict[str, Any]:
         "http2_window_update": http2.get("window_update", 0),
         "http2_stream_weight": priority.get("weight", 0),
         "http2_stream_exclusive": priority.get("exclusive", 0),
-        "http3_settings": _http3_settings(http3.get("settings")),
-        "http3_pseudo_headers_order": str(http3.get("pseudo_header_order", "")).replace(
-            ",", ""
-        ),
-        "quic_transport_parameters": _transport_parameters(transport),
-        "http3_tls_extension_order": (
-            None
-            if isinstance(h3_order, dict) and h3_order.get("mode") == "permuted"
-            else "-".join(
-                str(item)
-                for item in _fixed_order(h3_order, "HTTP/3 TLS extension order")
-                if item != "GREASE"
-            )
-        ),
         "ech": "true" if _extension_present(tcp_extensions, 65037) else "false",
         "tls_extension_order": (
             None
@@ -495,10 +471,6 @@ def candidate_from_bundle(bundle: Path, target: str) -> dict[str, Any]:
         ),
         "tls_use_new_alps_codepoint": _extension_present(tcp_extensions, 17613),
         "tls_signed_cert_timestamps": _extension_present(tcp_extensions, 18),
-        "http3_disable_tls_signed_cert_timestamps": not _extension_present(
-            h3_extensions, 18
-        ),
-        "http3_disable_tls_status_request": not _extension_present(h3_extensions, 5),
         "tls_grease": any(
             item == "GREASE" for item in _fixed_order(tcp_order, "TLS extension order")
         ),
@@ -507,6 +479,43 @@ def candidate_from_bundle(bundle: Path, target: str) -> dict[str, Any]:
     }
     if options["cert_compression"] is None:
         options.pop("cert_compression")
+    if not priority:
+        options["http2_no_priority"] = True
+    if isinstance(h3, dict):
+        h3_tls = h3.get("tls")
+        http3 = h3.get("http3")
+        if not isinstance(h3_tls, dict) or not isinstance(http3, dict):
+            raise ValueError("capture bundle has incomplete HTTP/3 sections")
+        h3_extensions = h3_tls.get("extensions")
+        h3_order = h3_tls.get("extension_order")
+        transport = _find_extension(h3_extensions, 57)
+        options.update(
+            {
+                "http3_signature_algorithms": _native_signature_names(
+                    _extension_values(h3_extensions, 13, "algorithms")
+                ),
+                "http3_settings": _http3_settings(http3.get("settings")),
+                "http3_pseudo_headers_order": str(
+                    http3.get("pseudo_header_order", "")
+                ).replace(",", ""),
+                "quic_transport_parameters": _transport_parameters(transport),
+                "http3_tls_extension_order": (
+                    None
+                    if isinstance(h3_order, dict) and h3_order.get("mode") == "permuted"
+                    else "-".join(
+                        str(item)
+                        for item in _fixed_order(h3_order, "HTTP/3 TLS extension order")
+                        if item != "GREASE"
+                    )
+                ),
+                "http3_disable_tls_signed_cert_timestamps": not _extension_present(
+                    h3_extensions, 18
+                ),
+                "http3_disable_tls_status_request": not _extension_present(
+                    h3_extensions, 5
+                ),
+            }
+        )
 
     release = manifest.get("expected_release")
     release = release if isinstance(release, dict) else {}

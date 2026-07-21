@@ -385,23 +385,29 @@ def sanitize_sample(sample: dict[str, Any]) -> dict[str, Any]:
 def normalize_sample(sample: dict[str, Any]) -> dict[str, Any]:
     trackme = sample.get("tls_http2")
     http3 = sample.get("http3")
-    if not isinstance(trackme, dict) or not isinstance(http3, dict):
-        raise ValueError("Capture sample must contain tls_http2 and http3 objects")
-    return {
+    if not isinstance(trackme, dict):
+        raise ValueError("Capture sample must contain a tls_http2 object")
+    normalized = {
         "browser": deepcopy(sample.get("browser", {})),
         "tls_http2": normalize_trackme(trackme),
-        "http3": normalize_http3(http3),
     }
+    if isinstance(http3, dict):
+        normalized["http3"] = normalize_http3(http3)
+    elif http3 is not None:
+        raise ValueError("Capture sample http3 field must be an object or null")
+    return normalized
 
 
 def _stable_view(sample: dict[str, Any]) -> dict[str, Any]:
     stable = deepcopy(sample)
     stable.pop("browser", None)
     stable["tls_http2"]["tls"].pop("extension_order", None)
-    stable["http3"]["tls"].pop("extension_order", None)
-    for extension in stable["http3"]["tls"]["extensions"]:
-        if extension.get("id") == 57:
-            extension.pop("parameter_order", None)
+    http3 = stable.get("http3")
+    if isinstance(http3, dict):
+        http3["tls"].pop("extension_order", None)
+        for extension in http3["tls"]["extensions"]:
+            if extension.get("id") == 57:
+                extension.pop("parameter_order", None)
     return stable
 
 
@@ -498,21 +504,22 @@ def build_profile(samples: list[dict[str, Any]]) -> dict[str, Any]:
         normalized[index]["tls_http2"]["tls"]["extension_order"]
         for index in selected_indexes
     ]
-    http3_orders = [
-        normalized[index]["http3"]["tls"]["extension_order"]
-        for index in selected_indexes
-    ]
     selected["tls_http2"]["tls"]["extension_order"] = _order_observation(tls_orders)
-    selected["http3"]["tls"]["extension_order"] = _order_observation(http3_orders)
-    parameter_orders = [
-        _find_extension(normalized[index]["http3"]["tls"]["extensions"], 57)[
-            "parameter_order"
+    if "http3" in selected:
+        http3_orders = [
+            normalized[index]["http3"]["tls"]["extension_order"]
+            for index in selected_indexes
         ]
-        for index in selected_indexes
-    ]
-    _find_extension(selected["http3"]["tls"]["extensions"], 57)["parameter_order"] = (
-        _order_observation(parameter_orders)
-    )
+        selected["http3"]["tls"]["extension_order"] = _order_observation(http3_orders)
+        parameter_orders = [
+            _find_extension(normalized[index]["http3"]["tls"]["extensions"], 57)[
+                "parameter_order"
+            ]
+            for index in selected_indexes
+        ]
+        _find_extension(selected["http3"]["tls"]["extensions"], 57)[
+            "parameter_order"
+        ] = _order_observation(parameter_orders)
 
     browser_identities = list(
         {

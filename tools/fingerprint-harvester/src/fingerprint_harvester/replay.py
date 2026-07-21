@@ -43,6 +43,7 @@ def capture_curl_sample(
     target: str,
     tls_url: str,
     http3_url: str,
+    include_http3: bool = True,
 ) -> dict[str, Any]:
     base = [
         str(curl_binary),
@@ -53,7 +54,11 @@ def capture_curl_sample(
         target,
     ]
     tls_http2 = _run_json([*base, "--http2", tls_url])
-    http3 = _run_json([*base, "--http3-only", http3_url], attempts=3)
+    http3 = (
+        _run_json([*base, "--http3-only", http3_url], attempts=3)
+        if include_http3
+        else None
+    )
     return {
         "browser": {
             "mode": "native-replay",
@@ -76,6 +81,7 @@ def capture_curl_samples(
     sample_count: int,
     tls_url: str,
     http3_url: str,
+    include_http3: bool = True,
 ) -> list[dict[str, Any]]:
     if sample_count < 3:
         raise ValueError("native replay requires at least three samples")
@@ -84,7 +90,13 @@ def capture_curl_samples(
             f"curl-impersonate binary does not exist: {curl_binary}"
         )
     return [
-        capture_curl_sample(curl_binary, target, tls_url, http3_url)
+        capture_curl_sample(
+            curl_binary,
+            target,
+            tls_url,
+            http3_url,
+            include_http3=include_http3,
+        )
         for _ in range(sample_count)
     ]
 

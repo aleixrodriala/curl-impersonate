@@ -247,11 +247,6 @@ class SafariRunner:
                 if candidate.get("protocol") == "http3":
                     http3_payload = candidate
                     break
-            if http3_payload is None:
-                raise SafariRunnerError(
-                    "Safari did not negotiate HTTP/3 after six tries"
-                )
-
             platform_version = capabilities.get("safari:platformVersion")
             observed_version = (
                 str(platform_version)

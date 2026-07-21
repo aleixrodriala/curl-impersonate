@@ -974,6 +974,30 @@ def test_unready_bundle_cannot_compile_native_candidate(tmp_path):
         candidate_from_bundle(bundle, "chrome151")
 
 
+def test_http2_only_safari_bundle_compiles_without_http3_options(tmp_path):
+    samples = [make_sample(), make_sample(), make_sample()]
+    for sample in samples:
+        sample["http3"] = None
+        sample["browser"]["version"] = "26.5.2"
+        sample["browser"]["user_agent"] = "Safari test"
+        sample["browser"]["platform"] = "MacIntel"
+        sample["tls_http2"]["http2"]["sent_frames"][2].pop("priority")
+    bundle = tmp_path / "safari"
+    write_capture_bundle(
+        bundle,
+        samples,
+        platform="macos",
+        distribution="consumer-safari",
+    )
+
+    candidate = candidate_from_bundle(bundle, "safari2652")
+
+    assert candidate["browser"]["name"] == "safari"
+    assert candidate["options"]["http2_no_priority"] is True
+    assert "http3_settings" not in candidate["options"]
+    assert "http3_tls_extension_order" not in candidate["options"]
+
+
 def test_candidate_rechecks_stale_persisted_readiness(tmp_path):
     bundle = tmp_path / "capture"
     samples = [make_sample(), make_sample(), make_sample()]

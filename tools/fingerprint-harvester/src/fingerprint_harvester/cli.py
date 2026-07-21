@@ -700,12 +700,18 @@ def _handle_render(args: argparse.Namespace) -> int:
 
 
 def _handle_replay(args: argparse.Namespace) -> int:
+    reference_profile = _load_profile(args.chrome_bundle)
+    fingerprint = reference_profile.get("fingerprint")
+    include_http3 = isinstance(fingerprint, dict) and isinstance(
+        fingerprint.get("http3"), dict
+    )
     samples = capture_curl_samples(
         args.curl_binary,
         args.target,
         args.samples,
         args.tls_url,
         args.http3_url,
+        include_http3=include_http3,
     )
     replay_profile, differences = compare_replay(args.chrome_bundle, samples)
     if args.output:
