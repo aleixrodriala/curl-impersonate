@@ -34,7 +34,6 @@ jobs:
             -noaudio -no-boot-anim
           disable-animations: true
           script: |
-            set -euo pipefail
             adb shell getprop ro.build.fingerprint
             adb shell getprop ro.build.type
             adb shell pm list packages | sort

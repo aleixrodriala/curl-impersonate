@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .android_runner import AndroidChromeRunner
 from .chrome_runner import (
     DEFAULT_HTTP3_URL,
     DEFAULT_TLS_URL,
@@ -137,6 +138,19 @@ def build_parser() -> argparse.ArgumentParser:
     safari_capture.add_argument("--ios-device-type", default="iPhone")
     safari_capture.add_argument("--tls-url", default=DEFAULT_TLS_URL)
     safari_capture.add_argument("--http3-url", default=DEFAULT_HTTP3_URL)
+
+    android_capture = subparsers.add_parser(
+        "android-capture",
+        help="Capture installed consumer Chrome on a real Android runtime",
+    )
+    android_capture.add_argument("--output", type=Path, required=True)
+    android_capture.add_argument("--samples", type=int, default=5)
+    android_capture.add_argument("--adb", type=Path)
+    android_capture.add_argument("--package", default="com.android.chrome")
+    android_capture.add_argument("--expected-version")
+    android_capture.add_argument("--allow-version-mismatch", action="store_true")
+    android_capture.add_argument("--tls-url", default=DEFAULT_TLS_URL)
+    android_capture.add_argument("--http3-url", default=DEFAULT_HTTP3_URL)
 
     normalize = subparsers.add_parser(
         "normalize", help="Rebuild a canonical profile from a capture bundle"
@@ -555,6 +569,39 @@ def _handle_safari_capture(args: argparse.Namespace) -> int:
     return 0 if ready else 1
 
 
+def _handle_android_capture(args: argparse.Namespace) -> int:
+    if args.samples < 3:
+        raise ValueError("android-capture requires --samples of at least three")
+    samples: list[dict[str, Any]] = []
+    with AndroidChromeRunner(adb=args.adb, package=args.package) as runner:
+        for index in range(args.samples):
+            print(
+                f"Capturing fresh Android Chrome profile {index + 1}/{args.samples}...",
+                file=sys.stderr,
+            )
+            samples.append(runner.capture_sample(args.tls_url, args.http3_url))
+    observed_version = _observed_version(
+        samples,
+        args.expected_version,
+        args.allow_version_mismatch,
+    )
+    profile = write_capture_bundle(
+        args.output,
+        samples,
+        platform="android",
+        distribution="consumer-chrome-android",
+    )
+    summary, ready = _capture_summary(
+        args.output,
+        observed_version,
+        profile,
+        "captured",
+        "consumer-chrome-android",
+    )
+    _print_json(summary)
+    return 0 if ready else 1
+
+
 def _handle_normalize(args: argparse.Namespace) -> int:
     profile = build_profile(load_bundle_samples(args.bundle))
     if args.output:
@@ -687,6 +734,7 @@ HANDLERS = {
     "harvest": _handle_harvest,
     "cft-harvest": _handle_cft_harvest,
     "safari-capture": _handle_safari_capture,
+    "android-capture": _handle_android_capture,
     "normalize": _handle_normalize,
     "diff": _handle_diff,
     "capabilities": _handle_capabilities,
