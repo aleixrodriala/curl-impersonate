@@ -123,13 +123,13 @@ jobs:
             -noaudio -no-boot-anim -no-metrics
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             for apk in "${RUNNER_TEMP}"/chrome-apks/*.apk; do
               apksigner verify --print-certs "$apk"
             done
             adb install -r "${RUNNER_TEMP}/chrome-apks/trichrome-base.apk"
-            chrome_apks=("${RUNNER_TEMP}"/chrome-apks/chrome-*.apk)
-            adb install-multiple -r "${chrome_apks[@]}"
+            adb install-multiple -r \
+              "${RUNNER_TEMP}"/chrome-apks/chrome-*.apk
             expected_version="$(
               jq -r '.version' "${RUNNER_TEMP}/chrome-apks/metadata.json"
             )"
