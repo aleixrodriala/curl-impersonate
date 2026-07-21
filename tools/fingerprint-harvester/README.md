@@ -222,9 +222,12 @@ The workflow intentionally does not tag or release.
 `safari-fingerprint-harvest.yml` uses GitHub-hosted macOS and iOS Simulator
 runners. `android-fingerprint-harvest.yml` uses the ARM64 `macos-15` runner
 so Play-delivered ARM64 Chrome executes without native-code translation. The
-Android workflow first attempts anonymous Play authentication and also accepts
-an encrypted `GPLAY_AUTH_B64` token or `GPLAY_DISPENSER_URL` secret. It
-never stores APKs in artifacts, commits, or releases.
+Android workflow first attempts anonymous Play authentication directly. If the
+dispenser rejects GitHub's datacenter address, only the token request is sent
+through an ephemeral Tor process; signed package delivery remains direct from
+Google Play. An encrypted `GPLAY_AUTH_B64` token or `GPLAY_DISPENSER_URL`
+secret can override that fallback. The workflow never stores APKs in artifacts,
+commits, or releases.
 
 ## Browser and collector behavior
 
