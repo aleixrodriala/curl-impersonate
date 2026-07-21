@@ -61,7 +61,7 @@ jobs:
             -noaudio -no-boot-anim -no-metrics
           disable-animations: true
           script: |
-            for apk in "${RUNNER_TEMP}"/chrome-apks/chrome-*.apk; do actual_cert="$("${ANDROID_HOME}/build-tools/37.0.0/apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"; test "$actual_cert" = "$(jq -r '.expected_certificate_sha256' "${RUNNER_TEMP}/chrome-apks/metadata.json")"; done
+            for apk in "${RUNNER_TEMP}"/chrome-apks/chrome-*.apk; do "${ANDROID_HOME}/build-tools/37.0.0/apksigner" verify "$apk"; "${ANDROID_HOME}/build-tools/37.0.0/apksigner" verify --print-certs "$apk" 2>&1 | grep -F "certificate SHA-256 digest: $(jq -r '.expected_certificate_sha256' "${RUNNER_TEMP}/chrome-apks/metadata.json")"; done
             "${ANDROID_HOME}/build-tools/37.0.0/aapt" dump badging "${RUNNER_TEMP}/chrome-apks/chrome-base.apk" | grep -F "package: name='com.android.chrome'"
             "${ANDROID_HOME}/build-tools/37.0.0/aapt" dump badging "${RUNNER_TEMP}/chrome-apks/chrome-base.apk" | grep -F "versionName='$(jq -r '.version' "${RUNNER_TEMP}/chrome-apks/metadata.json")'"
             unzip -l "${RUNNER_TEMP}/chrome-apks/chrome-base.apk" | grep -F 'lib/x86_64/libchrome.so'
