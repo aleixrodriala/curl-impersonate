@@ -108,7 +108,7 @@ jobs:
         run: |
           test -c /dev/kvm
           sudo chmod 0666 /dev/kvm
-          adb start-server
+          "${ANDROID_HOME}/platform-tools/adb" start-server
 
       - name: Capture fresh Android Chrome profiles
         uses: reactivecircus/android-emulator-runner@v2
