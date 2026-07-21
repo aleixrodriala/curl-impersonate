@@ -24,8 +24,16 @@ jobs:
 
       - name: Download Play-delivered consumer Chrome
         run: |
-          python -m pip install gplaydl
-          gplaydl auth >/dev/null
+          python -m pip install gplaydl==2.1.5
+          authenticated=false
+          for attempt in 1 2 3 4 5; do
+            if gplaydl auth >/dev/null; then
+              authenticated=true
+              break
+            fi
+            sleep 5
+          done
+          test "$authenticated" = true
           gplaydl download com.android.chrome \
             --output "${RUNNER_TEMP}/chrome-apks" \
             --no-extras
