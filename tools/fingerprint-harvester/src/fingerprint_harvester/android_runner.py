@@ -121,7 +121,8 @@ class AndroidChromeRunner:
     def _enable_test_launch(self) -> None:
         self._adb("shell", "am", "set-debug-app", "--persistent", self.package)
         command_line = (
-            "chrome --disable-fre --no-default-browser-check "
+            "chrome --disable-fre --enable-remote-debugging "
+            "--no-default-browser-check "
             "--no-first-run --disable-first-run-experience\n"
         )
         with NamedTemporaryFile(mode="w", encoding="utf-8", delete=False) as file:
@@ -148,7 +149,8 @@ class AndroidChromeRunner:
             "android.intent.action.VIEW",
             "-d",
             url,
-            self.package,
+            "-n",
+            f"{self.package}/com.google.android.apps.chrome.Main",
             timeout=60,
         )
 

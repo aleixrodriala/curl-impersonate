@@ -11,6 +11,7 @@ from fingerprint_harvester.android_play import (
     authenticate_play,
     build_x86_64_profile,
 )
+from fingerprint_harvester.android_runner import AndroidChromeRunner
 from fingerprint_harvester.bundle import load_json, write_capture_bundle
 from fingerprint_harvester.capabilities import analyze_capabilities
 from fingerprint_harvester.chrome_runner import (
@@ -65,6 +66,37 @@ def test_x86_64_play_authentication_saves_token(monkeypatch):
     authenticate_play("x86_64", "https://dispenser.example.test")
 
     assert saved == [({"authToken": "test-token"}, "x86_64")]
+
+
+def test_android_test_launch_enables_remote_debugging():
+    runner = AndroidChromeRunner()
+    command_line = []
+
+    def fake_adb(*arguments, **kwargs):
+        if arguments[0] == "push":
+            command_line.append(Path(arguments[1]).read_text(encoding="utf-8"))
+        return ""
+
+    runner._adb = fake_adb
+    runner._enable_test_launch()
+
+    assert "--disable-fre" in command_line[0]
+    assert "--enable-remote-debugging" in command_line[0]
+
+
+def test_android_url_launch_targets_chrome_main_activity():
+    runner = AndroidChromeRunner(package="com.android.chrome")
+    calls = []
+    runner._adb = lambda *arguments, **kwargs: calls.append((arguments, kwargs)) or ""
+
+    runner._open_url("https://example.test/")
+
+    arguments, kwargs = calls[0]
+    assert arguments[-2:] == (
+        "-n",
+        "com.android.chrome/com.google.android.apps.chrome.Main",
+    )
+    assert kwargs == {"timeout": 60}
 
 
 def make_trackme(
