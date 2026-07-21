@@ -19,6 +19,7 @@ DEFAULT_RELEASE_FEED = (
 DEFAULT_VERSION_HISTORY_API = "https://versionhistory.googleapis.com/v1/chrome"
 
 CONSUMER_PLATFORMS = {
+    "android",
     "linux",
     "win64",
     "mac",

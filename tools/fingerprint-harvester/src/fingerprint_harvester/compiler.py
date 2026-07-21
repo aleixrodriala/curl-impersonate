@@ -10,6 +10,13 @@ from .readiness import evaluate_readiness
 
 TARGET_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
+BROWSER_NAMES = {
+    "consumer-chrome": "chrome",
+    "consumer-chrome-android": "chrome",
+    "consumer-safari": "safari",
+    "consumer-safari-ios": "safari",
+}
+
 HTTP_VERSION_CONSTANTS = {
     "1.1": "CURL_HTTP_VERSION_1_1",
     "2": "CURL_HTTP_VERSION_2_0",
@@ -503,17 +510,18 @@ def candidate_from_bundle(bundle: Path, target: str) -> dict[str, Any]:
 
     release = manifest.get("expected_release")
     release = release if isinstance(release, dict) else {}
+    distribution = str(manifest.get("browser_distribution", "unverified"))
     native_profile = {
         "schema_version": 1,
         "target": target,
         "alias": target,
         "browser": {
-            "name": "chrome",
+            "name": BROWSER_NAMES.get(distribution, "unknown"),
             "version": str(identity.get("version", release.get("version", ""))),
             "os": str(manifest.get("platform", identity.get("platform", ""))),
         },
         "provenance": {
-            "browser_distribution": manifest.get("browser_distribution"),
+            "browser_distribution": distribution,
             "capture_bundle": str(bundle),
             "fingerprint_digest": profile.get("fingerprint_digest"),
             "sample_count": profile.get("sample_count"),

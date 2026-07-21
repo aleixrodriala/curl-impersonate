@@ -5,7 +5,12 @@ from .capabilities import analyze_capabilities
 from .models import CapabilityGap
 
 
-CANONICAL_DISTRIBUTION = "consumer-chrome"
+CANONICAL_DISTRIBUTIONS = {
+    "consumer-chrome",
+    "consumer-chrome-android",
+    "consumer-safari",
+    "consumer-safari-ios",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,7 +32,7 @@ def evaluate_readiness(
     distribution: str,
 ) -> ReadinessReport:
     blockers: list[str] = []
-    if distribution != CANONICAL_DISTRIBUTION:
+    if distribution not in CANONICAL_DISTRIBUTIONS:
         blockers.append(
             f"capture must come from consumer Google Chrome Stable, not {distribution}"
         )

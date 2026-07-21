@@ -25,6 +25,7 @@ from .normalize import (
 )
 from .readiness import evaluate_readiness
 from .replay import capture_curl_samples, compare_replay
+from .safari_runner import SafariRunner
 from .releases import (
     DEFAULT_RELEASE_FEED,
     DEFAULT_VERSION_HISTORY_API,
@@ -122,6 +123,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cft_harvest.add_argument("--tls-url", default=DEFAULT_TLS_URL)
     cft_harvest.add_argument("--http3-url", default=DEFAULT_HTTP3_URL)
+
+    safari_capture = subparsers.add_parser(
+        "safari-capture",
+        help="Capture real macOS or iOS Simulator Safari",
+    )
+    safari_capture.add_argument("--output", type=Path, required=True)
+    safari_capture.add_argument("--samples", type=int, default=5)
+    safari_capture.add_argument("--platform", choices=("macos", "ios"), default="macos")
+    safari_capture.add_argument("--ios-version")
+    safari_capture.add_argument("--ios-device-name")
+    safari_capture.add_argument("--ios-device-udid")
+    safari_capture.add_argument("--ios-device-type", default="iPhone")
+    safari_capture.add_argument("--tls-url", default=DEFAULT_TLS_URL)
+    safari_capture.add_argument("--http3-url", default=DEFAULT_HTTP3_URL)
 
     normalize = subparsers.add_parser(
         "normalize", help="Rebuild a canonical profile from a capture bundle"
@@ -501,6 +516,45 @@ def _handle_cft_harvest(args: argparse.Namespace) -> int:
     return 1
 
 
+def _handle_safari_capture(args: argparse.Namespace) -> int:
+    if args.samples < 3:
+        raise ValueError("safari-capture requires --samples of at least three")
+    samples: list[dict[str, Any]] = []
+    with SafariRunner(
+        platform=args.platform,
+        ios_version=args.ios_version,
+        ios_device_name=args.ios_device_name,
+        ios_device_udid=args.ios_device_udid,
+        ios_device_type=args.ios_device_type,
+    ) as runner:
+        for index in range(args.samples):
+            print(
+                f"Capturing fresh {args.platform} Safari session "
+                f"{index + 1}/{args.samples}...",
+                file=sys.stderr,
+            )
+            samples.append(runner.capture_sample(args.tls_url, args.http3_url))
+    observed_version = _observed_version(samples, None)
+    distribution = (
+        "consumer-safari-ios" if args.platform == "ios" else "consumer-safari"
+    )
+    profile = write_capture_bundle(
+        args.output,
+        samples,
+        platform=args.platform,
+        distribution=distribution,
+    )
+    summary, ready = _capture_summary(
+        args.output,
+        observed_version,
+        profile,
+        "captured",
+        distribution,
+    )
+    _print_json(summary)
+    return 0 if ready else 1
+
+
 def _handle_normalize(args: argparse.Namespace) -> int:
     profile = build_profile(load_bundle_samples(args.bundle))
     if args.output:
@@ -632,6 +686,7 @@ HANDLERS = {
     "capture": _handle_capture,
     "harvest": _handle_harvest,
     "cft-harvest": _handle_cft_harvest,
+    "safari-capture": _handle_safari_capture,
     "normalize": _handle_normalize,
     "diff": _handle_diff,
     "capabilities": _handle_capabilities,

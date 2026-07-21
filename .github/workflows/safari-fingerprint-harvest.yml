@@ -1,0 +1,84 @@
+name: Harvest Safari fingerprints
+
+on:
+  schedule:
+    - cron: "31 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: safari-fingerprint-harvest
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    name: Capture ${{ matrix.platform }} Safari
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            platform: macos
+          - os: macos-26-intel
+            platform: ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Select Xcode and boot iOS 26.5 Simulator
+        if: matrix.platform == 'ios'
+        run: |
+          set -euo pipefail
+          sudo xcode-select --switch /Applications/Xcode_26.6.app
+          device_udid="$(
+            xcrun simctl list devices 'iOS 26.5' available --json |
+              jq -er '[.devices[][] | select(.name == "iPhone 17")][0].udid'
+          )"
+          xcrun simctl boot "$device_udid" || true
+          open -a Simulator --args -CurrentDeviceUDID "$device_udid"
+          xcrun simctl bootstatus "$device_udid" -b
+          echo "IOS_DEVICE_UDID=$device_udid" >> "$GITHUB_ENV"
+
+      - name: Enable Safari WebDriver
+        run: sudo safaridriver --enable
+
+      - name: Install harvester
+        run: |
+          python -m pip install uv
+          uv sync --project tools/fingerprint-harvester
+
+      - name: Capture macOS Safari
+        if: matrix.platform == 'macos'
+        run: |
+          uv run --project tools/fingerprint-harvester \
+            curl-impersonate-harvest safari-capture \
+            --platform macos \
+            --samples 5 \
+            --output "${RUNNER_TEMP}/fingerprint-harvester/macos"
+
+      - name: Capture iOS Safari
+        if: matrix.platform == 'ios'
+        run: |
+          uv run --project tools/fingerprint-harvester \
+            curl-impersonate-harvest safari-capture \
+            --platform ios \
+            --ios-version 26.5 \
+            --ios-device-name "iPhone 17" \
+            --ios-device-udid "$IOS_DEVICE_UDID" \
+            --samples 5 \
+            --output "${RUNNER_TEMP}/fingerprint-harvester/ios"
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: safari-${{ matrix.platform }}
+          path: ${{ runner.temp }}/fingerprint-harvester
+          if-no-files-found: error
+          retention-days: 7
