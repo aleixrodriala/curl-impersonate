@@ -93,7 +93,7 @@ def _read_json_body(page: Any, attempts: int = 30) -> dict[str, Any]:
             if isinstance(payload, dict):
                 return payload
             last_error = ValueError("collector response was not a JSON object")
-        except (json.JSONDecodeError, TimeoutError, ValueError) as exc:
+        except Exception as exc:
             last_error = exc
         page.wait_for_timeout(100)
     raise ChromeRunnerError(f"Collector did not return complete JSON: {last_error}")

@@ -205,6 +205,32 @@ def test_android_collector_navigation_is_typed():
     ]
 
 
+def test_json_body_reader_retries_client_timeouts():
+    calls = []
+
+    class Locator:
+        def inner_text(self, timeout):
+            calls.append(("inner_text", timeout))
+            if len(calls) == 1:
+                raise RuntimeError("temporary client timeout")
+            return '{"protocol": "http3"}'
+
+    class Page:
+        def locator(self, selector):
+            assert selector == "body"
+            return Locator()
+
+        def wait_for_timeout(self, timeout):
+            calls.append(("wait_for_timeout", timeout))
+
+    assert _read_json_body(Page(), attempts=2) == {"protocol": "http3"}
+    assert calls == [
+        ("inner_text", 2_000),
+        ("wait_for_timeout", 100),
+        ("inner_text", 2_000),
+    ]
+
+
 def make_trackme(
     signature_algorithms=None,
     extra_extensions=None,
