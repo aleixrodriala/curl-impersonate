@@ -235,6 +235,17 @@ class AndroidChromeRunner:
             f"Android Chrome did not open {url}; observed {observed}"
         )
 
+    @staticmethod
+    def _navigate_as_typed(context: Any, page: Any, url: str) -> None:
+        session = context.new_cdp_session(page)
+        try:
+            session.send(
+                "Page.navigate",
+                {"url": url, "transitionType": "typed"},
+            )
+        finally:
+            session.detach()
+
     def capture_sample(
         self,
         tls_url: str = DEFAULT_TLS_URL,
@@ -262,7 +273,7 @@ class AndroidChromeRunner:
                 self.package,
             )
             self._enable_test_launch()
-            self._open_url(tls_url)
+            self._open_url("about:blank")
         self._wait_for_debug_socket()
         port = int(
             self._adb(
@@ -285,11 +296,11 @@ class AndroidChromeRunner:
                 raise AndroidChromeRunnerError("Android Chrome exposed no CDP page")
             context = browser.contexts[0]
             if self.reset_profile:
-                page = self._wait_for_page(context, tls_url)
+                page = context.pages[-1]
             else:
                 page = context.new_page()
                 capture_pages.append(page)
-                page.goto(tls_url, wait_until="domcontentloaded")
+            self._navigate_as_typed(context, page, tls_url)
             tls_payload = _read_json_body(page)
             browser_data = {
                 "version": browser.version,
@@ -305,13 +316,9 @@ class AndroidChromeRunner:
 
             http3_payload = None
             for _ in range(6):
-                if self.reset_profile:
-                    self._open_url(http3_url)
-                    http3_page = self._wait_for_page(context, http3_url)
-                else:
-                    http3_page = context.new_page()
-                    capture_pages.append(http3_page)
-                    http3_page.goto(http3_url, wait_until="domcontentloaded")
+                http3_page = context.new_page()
+                capture_pages.append(http3_page)
+                self._navigate_as_typed(context, http3_page, http3_url)
                 try:
                     candidate = _read_json_body(http3_page)
                 except ChromeRunnerError:
@@ -334,9 +341,9 @@ class AndroidChromeRunner:
                     "automation": "adb-cdp-attach",
                     "package": self.package,
                     "collector_navigation": (
-                        "android-view-intent"
+                        "android-view-intent-and-cdp-typed-navigation"
                         if self.reset_profile
-                        else "playwright-cdp-page"
+                        else "cdp-typed-navigation"
                     ),
                     "profile_reset": self.reset_profile,
                 },

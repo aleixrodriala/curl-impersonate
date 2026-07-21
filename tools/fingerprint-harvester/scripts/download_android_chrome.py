@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download Play-signed Chrome and its matching Trichrome library."""
+"""Download Google-signed Android Chrome packages for fingerprint capture."""
 
 import argparse
 import json
@@ -9,6 +9,9 @@ from gplaydl.api import get_delivery, get_details, purchase
 from gplaydl.auth import load_cached_auth
 from gplaydl.download import DownloadSpec, download_batch
 
+from fingerprint_harvester.android_apkmirror import (
+    download_latest_x86_64_chrome,
+)
 from fingerprint_harvester.android_play import SUPPORTED_ARCHITECTURES
 
 
@@ -49,7 +52,25 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--arch", choices=SUPPORTED_ARCHITECTURES, required=True)
+    parser.add_argument("--chrome-binary", type=Path)
+    parser.add_argument("--headless-browser", action="store_true")
     args = parser.parse_args()
+
+    if args.arch == "x86_64":
+        if args.chrome_binary is None:
+            raise ValueError("x86_64 downloads require --chrome-binary")
+        args.output.mkdir(parents=True, exist_ok=True)
+        metadata = download_latest_x86_64_chrome(
+            args.output,
+            args.chrome_binary.expanduser().resolve(),
+            headless=args.headless_browser,
+        )
+        (args.output / "metadata.json").write_text(
+            json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print(json.dumps(metadata, sort_keys=True))
+        return 0
 
     auth = load_cached_auth(args.arch)
     if not auth or not auth.get("authToken"):

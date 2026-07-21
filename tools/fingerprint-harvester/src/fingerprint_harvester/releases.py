@@ -118,6 +118,22 @@ def parse_version_history(
     )
 
 
+def parse_version_history_versions(payload: dict[str, object]) -> tuple[str, ...]:
+    versions = payload.get("versions")
+    if not isinstance(versions, list):
+        raise ValueError("Chrome VersionHistory response has no versions list")
+    parsed = tuple(
+        version
+        for item in versions
+        if isinstance(item, dict)
+        and isinstance((version := item.get("version")), str)
+        and version
+    )
+    if not parsed:
+        raise ValueError("Chrome VersionHistory response has no valid versions")
+    return parsed
+
+
 def fetch_consumer_release(
     platform: str,
     channel: str = "stable",
@@ -139,6 +155,29 @@ def fetch_consumer_release(
         platform=platform,
         channel=normalized_channel,
     )
+
+
+def fetch_consumer_versions(
+    platform: str,
+    channel: str = "stable",
+    page_size: int = 20,
+    api_root: str = DEFAULT_VERSION_HISTORY_API,
+    fetch_json: Callable[[str], dict[str, object]] = _fetch_json,
+) -> tuple[str, ...]:
+    if platform not in CONSUMER_PLATFORMS:
+        available = ", ".join(sorted(CONSUMER_PLATFORMS))
+        raise ValueError(
+            f"Unsupported consumer Chrome platform {platform!r}; available: {available}"
+        )
+    if not 1 <= page_size <= 200:
+        raise ValueError("Chrome VersionHistory page_size must be between 1 and 200")
+    normalized_channel = channel.lower()
+    url = (
+        f"{api_root.rstrip('/')}/platforms/{quote(platform)}/channels/"
+        f"{quote(normalized_channel)}/versions?page_size={page_size}"
+        "&order_by=version%20desc"
+    )
+    return parse_version_history_versions(fetch_json(url))
 
 
 def _safe_extract(archive: ZipFile, destination: Path) -> None:

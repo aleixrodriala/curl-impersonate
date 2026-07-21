@@ -7,6 +7,11 @@ from zipfile import ZipFile, ZipInfo
 
 import pytest
 
+from fingerprint_harvester.android_apkmirror import (
+    CHROME_CERTIFICATE_SHA256,
+    chrome_release_url,
+    extract_chrome_apkm,
+)
 from fingerprint_harvester.android_play import (
     authenticate_play,
     build_x86_64_profile,
@@ -40,6 +45,7 @@ from fingerprint_harvester.releases import (
     _safe_extract,
     parse_release_feed,
     parse_version_history,
+    parse_version_history_versions,
 )
 from fingerprint_harvester.replay import compare_replay
 
@@ -66,6 +72,66 @@ def test_x86_64_play_authentication_saves_token(monkeypatch):
     authenticate_play("x86_64", "https://dispenser.example.test")
 
     assert saved == [({"authToken": "test-token"}, "x86_64")]
+
+
+def test_parse_version_history_versions_preserves_release_order():
+    payload = {
+        "versions": [
+            {"version": "151.0.7922.29"},
+            {"version": "150.0.7871.181"},
+            {"name": "ignored"},
+        ]
+    }
+
+    assert parse_version_history_versions(payload) == (
+        "151.0.7922.29",
+        "150.0.7871.181",
+    )
+
+
+def test_extract_x86_64_android_chrome_bundle(tmp_path):
+    base_apk = tmp_path / "base.apk"
+    with ZipFile(base_apk, "w") as archive:
+        archive.writestr("lib/x86_64/libchrome.so", b"native")
+
+    bundle = tmp_path / "chrome.apkm"
+    with ZipFile(bundle, "w") as archive:
+        archive.writestr(
+            "info.json",
+            json.dumps(
+                {
+                    "pname": "com.android.chrome",
+                    "release_version": "151.0.7922.29",
+                    "versioncode": "792202908",
+                    "arches": ["x86_64"],
+                }
+            ),
+        )
+        archive.write(base_apk, "base.apk")
+        archive.writestr("split_chrome.apk", b"feature")
+        archive.writestr("split_config.en.apk", b"english")
+        archive.writestr("split_config.es.apk", b"spanish")
+
+    output = tmp_path / "output"
+    metadata = extract_chrome_apkm(
+        bundle,
+        output,
+        expected_version="151.0.7922.29",
+        expected_version_code=792202908,
+    )
+
+    assert metadata["version"] == "151.0.7922.29"
+    assert metadata["expected_certificate_sha256"] == CHROME_CERTIFICATE_SHA256
+    assert (output / "chrome-base.apk").exists()
+    assert (output / "chrome-chrome.apk").read_bytes() == b"feature"
+    assert (output / "chrome-config.en.apk").read_bytes() == b"english"
+    assert not (output / "chrome-config.es.apk").exists()
+
+
+def test_android_chrome_release_url_uses_version_slug():
+    assert chrome_release_url("151.0.7922.29").endswith(
+        "/google-chrome-151-0-7922-29-release/"
+    )
 
 
 def test_android_test_launch_enables_remote_debugging():
@@ -107,6 +173,36 @@ def test_android_url_launch_targets_chrome_main_activity():
         "com.android.chrome/com.google.android.apps.chrome.Main",
     )
     assert kwargs == {"timeout": 60}
+
+
+def test_android_collector_navigation_is_typed():
+    runner = AndroidChromeRunner()
+    sent = []
+
+    class Session:
+        def send(self, method, params):
+            sent.append((method, params))
+
+        def detach(self):
+            sent.append(("detach", None))
+
+    class Context:
+        def new_cdp_session(self, page):
+            assert page == "page"
+            return Session()
+
+    runner._navigate_as_typed(Context(), "page", "https://example.test/")
+
+    assert sent == [
+        (
+            "Page.navigate",
+            {
+                "url": "https://example.test/",
+                "transitionType": "typed",
+            },
+        ),
+        ("detach", None),
+    ]
 
 
 def make_trackme(

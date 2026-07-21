@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   capture:
-    name: Capture Play-delivered Android Chrome
+    name: Capture Google-signed Android Chrome
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -33,75 +33,13 @@ jobs:
           python -m pip install uv
           uv sync --project tools/fingerprint-harvester
 
-      - name: Authenticate to Google Play
-        env:
-          GPLAY_AUTH_B64: ${{ secrets.GPLAY_AUTH_B64 }}
-          GPLAY_DISPENSER_URL: ${{ secrets.GPLAY_DISPENSER_URL }}
+      - name: Download latest Google-signed x86_64 Chrome
         run: |
-          set -euo pipefail
-          if [[ -n "$GPLAY_AUTH_B64" ]]; then
-            mkdir -p "${HOME}/.config/gplaydl"
-            printf '%s' "$GPLAY_AUTH_B64" | base64 --decode \
-              > "${HOME}/.config/gplaydl/auth-x86_64.json"
-            exit 0
-          fi
-
-          auth=(
-            uv run --project tools/fingerprint-harvester
-            python tools/fingerprint-harvester/scripts/authenticate_android_play.py
-            --arch x86_64
-          )
-          if [[ -n "$GPLAY_DISPENSER_URL" ]]; then
-            for attempt in 1 2 3 4 5; do
-              if "${auth[@]}" --dispenser "$GPLAY_DISPENSER_URL" >/dev/null; then
-                exit 0
-              fi
-              sleep 5
-            done
-            exit 1
-          fi
-
-          # GitHub datacenter addresses can be rejected by the anonymous token
-          # dispenser. Use Tor only for that small authentication request; the
-          # signed packages are still fetched directly from Google Play.
-          if "${auth[@]}" >/dev/null; then
-            exit 0
-          fi
-          sudo apt-get update
-          sudo apt-get install -y tor
-          mkdir -p "${RUNNER_TEMP}/tor-data"
-          tor \
-            --SocksPort 19050 \
-            --DataDirectory "${RUNNER_TEMP}/tor-data" \
-            --Log "notice file ${RUNNER_TEMP}/tor.log" &
-          tor_pid=$!
-          trap 'kill "$tor_pid" >/dev/null 2>&1 || true' EXIT
-          for attempt in $(seq 1 60); do
-            if nc -z 127.0.0.1 19050; then
-              break
-            fi
-            sleep 1
-          done
-          nc -z 127.0.0.1 19050
-
-          authenticated=false
-          for attempt in 1 2 3 4 5; do
-            if env \
-              ALL_PROXY=socks5://127.0.0.1:19050 \
-              HTTP_PROXY= HTTPS_PROXY= NO_PROXY= \
-              "${auth[@]}" >/dev/null; then
-              authenticated=true
-              break
-            fi
-            sleep 5
-          done
-          test "$authenticated" = true
-
-      - name: Download signed Chrome and Trichrome packages
-        run: |
-          uv run --project tools/fingerprint-harvester \
+          test -x "$(command -v google-chrome)"
+          xvfb-run -a uv run --project tools/fingerprint-harvester \
             python tools/fingerprint-harvester/scripts/download_android_chrome.py \
             --arch x86_64 \
+            --chrome-binary "$(command -v google-chrome)" \
             --output "${RUNNER_TEMP}/chrome-apks"
 
       - name: Prepare KVM and ADB
@@ -123,9 +61,12 @@ jobs:
             -noaudio -no-boot-anim -no-metrics
           disable-animations: true
           script: |
-            for apk in "${RUNNER_TEMP}"/chrome-apks/*.apk; do "${ANDROID_HOME}/build-tools/37.0.0/apksigner" verify --print-certs "$apk"; done
-            adb install -r "${RUNNER_TEMP}/chrome-apks/trichrome-base.apk"
-            adb install-multiple -r "${RUNNER_TEMP}"/chrome-apks/chrome-*.apk
+            for apk in "${RUNNER_TEMP}"/chrome-apks/chrome-*.apk; do actual_cert="$("${ANDROID_HOME}/build-tools/37.0.0/apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"; test "$actual_cert" = "$(jq -r '.expected_certificate_sha256' "${RUNNER_TEMP}/chrome-apks/metadata.json")"; done
+            "${ANDROID_HOME}/build-tools/37.0.0/aapt" dump badging "${RUNNER_TEMP}/chrome-apks/chrome-base.apk" | grep -F "package: name='com.android.chrome'"
+            "${ANDROID_HOME}/build-tools/37.0.0/aapt" dump badging "${RUNNER_TEMP}/chrome-apks/chrome-base.apk" | grep -F "versionName='$(jq -r '.version' "${RUNNER_TEMP}/chrome-apks/metadata.json")'"
+            unzip -l "${RUNNER_TEMP}/chrome-apks/chrome-base.apk" | grep -F 'lib/x86_64/libchrome.so'
+            adb install-multiple -r -d "${RUNNER_TEMP}"/chrome-apks/chrome-*.apk
+            adb shell dumpsys package com.android.chrome | grep -m1 -F 'primaryCpuAbi=x86_64'
             adb shell dumpsys package com.android.chrome | grep -E 'versionName=|versionCode=' | head -2
             uv run --project tools/fingerprint-harvester curl-impersonate-harvest android-capture --adb "${ANDROID_HOME}/platform-tools/adb" --expected-version "$(jq -r '.version' "${RUNNER_TEMP}/chrome-apks/metadata.json")" --connect-timeout-ms 60000 --samples 5 --output "${RUNNER_TEMP}/fingerprint-harvester/android"
 

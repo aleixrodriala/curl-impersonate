@@ -29,6 +29,7 @@ extended list as an API on `impersonate.pro <https://impersonate.pro>`_. See :do
    "Chrome", "150", "macOS Tahoe", "``chrome150`` / ``chrome150_macos``", "", "Yes"
    "Chrome", "99", "Android 12", "``chrome99_android``", "``curl_chrome99_android``", ""
    "Chrome", "131", "Android 14", "``chrome131_android``", "``curl_chrome131_android``", ""
+   "Chrome", "151", "Android 15", "``chrome151_android``", "", "Yes"
    "Edge", "99", "Windows 10", "``edge99``", "``curl_edge99``", ""
    "Edge", "101", "Windows 10", "``edge101``", "``curl_edge101``", ""
    "Safari", "15.3", "macOS Big Sur", "``safari153``", "``curl_safari153``", ""

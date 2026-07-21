@@ -38,3 +38,8 @@ Desktop Chrome majors expose explicit `_linux`, `_windows`, and `_macos`
 targets because their default headers and client hints differ even when their
 TLS, HTTP/2, HTTP/3, and QUIC transport behavior is identical. The unsuffixed
 target is retained as the macOS-compatible default.
+
+Android Chrome majors use an explicit `_android` target. Android evidence comes
+from native x86_64 Chrome on an Android emulator, while physical ARM64 evidence
+is used to confirm that CPU architecture does not change the reproducible wire
+fingerprint.

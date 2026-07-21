@@ -111,9 +111,11 @@ than synthesized.
 
 Android capture attaches Playwright as a CDP client to the installed
 `com.android.chrome` package. Canonical captures clear a dedicated emulator
-profile before every sample. ``--preserve-profile`` is available for safe
-diagnostics on a personal device but is not compilation-ready when connection
-state produces more than one variant.
+profile before every sample. Collector navigation uses CDP's `typed`
+transition, which preserves the same user-navigation Fetch Metadata headers as
+entering the URL in Chrome's address bar. ``--preserve-profile`` is available
+for safe diagnostics on a personal device but is not compilation-ready when
+connection state produces more than one variant.
 
 ~~~sh
 uv run --project tools/fingerprint-harvester \
@@ -123,12 +125,14 @@ uv run --project tools/fingerprint-harvester \
   --output captures/chrome-android
 ~~~
 
-The hosted workflow downloads Chrome and its exact-version Trichrome shared
-library directly from Google Play, verifies their signatures, installs them on
-an x86_64 Android 15 Play Store emulator with KVM acceleration, and deletes the
-proprietary packages with the ephemeral runner. Only sanitized fingerprint
-evidence is uploaded. The Play device profile explicitly requests Google's
-x86_64 package variant, so no ARM translation layer is involved.
+The hosted workflow reads Google's official Android Stable version history and
+uses a headful Google Chrome session to retrieve the newest standalone x86_64
+package bundle available from APKMirror. Every extracted APK must match the
+pinned Google Chrome signing certificate, package name, version, and a nonempty
+native `x86_64/libchrome.so` before installation. It then runs Chrome on an
+x86_64 Android 15 Play Store emulator with KVM acceleration. APKs remain on the
+ephemeral runner and only sanitized fingerprint evidence is uploaded, so no ARM
+translation layer or proprietary binary artifact is involved.
 
 ## Bundle contract
 
@@ -223,13 +227,12 @@ The workflow intentionally does not tag or release.
 
 `safari-fingerprint-harvest.yml` uses GitHub-hosted macOS and iOS Simulator
 runners. `android-fingerprint-harvest.yml` uses an x86_64 Ubuntu runner with
-KVM, plus Google's Play-delivered x86_64 Chrome and Trichrome packages. The
-Android workflow first attempts anonymous Play authentication directly. If the
-dispenser rejects GitHub's datacenter address, only the token request is sent
-through an ephemeral Tor process; signed package delivery remains direct from
-Google Play. An encrypted `GPLAY_AUTH_B64` token or `GPLAY_DISPENSER_URL`
-secret can override that fallback. The workflow never stores APKs in artifacts,
-commits, or releases.
+KVM. It discovers Android releases from Google's VersionHistory API, downloads
+the matching x86_64 bundle through a real Chrome session, and rejects anything
+that does not carry Google's pinned Chrome certificate. This avoids Play rollout
+and architecture-selection lag without trusting the mirror as a signing
+authority. The workflow needs no package-download secret and never stores APKs
+in artifacts, commits, or releases.
 
 ## Browser and collector behavior
 
