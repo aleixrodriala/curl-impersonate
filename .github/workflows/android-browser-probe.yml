@@ -1,0 +1,49 @@
+name: Probe Android consumer Chrome
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable KVM
+        run: |
+          sudo usermod -aG kvm "$USER"
+          sudo chmod 666 /dev/kvm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Inspect the Play Store system image
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis_playstore
+          arch: x86_64
+          profile: pixel_7
+          emulator-options: >-
+            -no-window -gpu swiftshader_indirect -no-snapshot
+            -noaudio -no-boot-anim
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            adb shell getprop ro.build.fingerprint
+            adb shell getprop ro.build.type
+            adb shell pm list packages | sort
+            adb shell dumpsys package com.android.chrome |
+              grep -E 'versionName=|versionCode=|signatures=|flags='
+            adb shell am set-debug-app --persistent com.android.chrome
+            adb shell am start -W \
+              -a android.intent.action.VIEW \
+              -d https://tls.peet.ws/api/all \
+              com.android.chrome
+            sleep 5
+            adb shell cat /proc/net/unix | grep chrome_devtools_remote
