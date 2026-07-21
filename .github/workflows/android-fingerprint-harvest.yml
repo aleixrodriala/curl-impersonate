@@ -123,25 +123,11 @@ jobs:
             -noaudio -no-boot-anim -no-metrics
           disable-animations: true
           script: |
-            set -eu
-            for apk in "${RUNNER_TEMP}"/chrome-apks/*.apk; do
-              apksigner verify --print-certs "$apk"
-            done
+            for apk in "${RUNNER_TEMP}"/chrome-apks/*.apk; do apksigner verify --print-certs "$apk"; done
             adb install -r "${RUNNER_TEMP}/chrome-apks/trichrome-base.apk"
-            adb install-multiple -r \
-              "${RUNNER_TEMP}"/chrome-apks/chrome-*.apk
-            expected_version="$(
-              jq -r '.version' "${RUNNER_TEMP}/chrome-apks/metadata.json"
-            )"
-            adb shell dumpsys package com.android.chrome | \
-              grep -E 'versionName=|versionCode=' | head -2
-            uv run --project tools/fingerprint-harvester \
-              curl-impersonate-harvest android-capture \
-              --adb "${ANDROID_HOME}/platform-tools/adb" \
-              --expected-version "$expected_version" \
-              --connect-timeout-ms 60000 \
-              --samples 5 \
-              --output "${RUNNER_TEMP}/fingerprint-harvester/android"
+            adb install-multiple -r "${RUNNER_TEMP}"/chrome-apks/chrome-*.apk
+            adb shell dumpsys package com.android.chrome | grep -E 'versionName=|versionCode=' | head -2
+            uv run --project tools/fingerprint-harvester curl-impersonate-harvest android-capture --adb "${ANDROID_HOME}/platform-tools/adb" --expected-version "$(jq -r '.version' "${RUNNER_TEMP}/chrome-apks/metadata.json")" --connect-timeout-ms 60000 --samples 5 --output "${RUNNER_TEMP}/fingerprint-harvester/android"
 
       - name: Upload sanitized evidence
         if: always()
