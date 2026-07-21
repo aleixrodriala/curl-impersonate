@@ -22,6 +22,14 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Download Play-delivered consumer Chrome
+        run: |
+          python -m pip install gplaydl
+          gplaydl auth >/dev/null
+          gplaydl download com.android.chrome \
+            --output "${RUNNER_TEMP}/chrome-apks" \
+            --no-extras
+
       - name: Inspect the Play Store system image
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -36,9 +44,9 @@ jobs:
           script: |
             adb shell getprop ro.build.fingerprint
             adb shell getprop ro.build.type
-            adb shell pm list packages | sort
-            adb shell dumpsys package com.android.chrome |
-              grep -E 'versionName=|versionCode=|signatures=|flags='
+            for apk in "${RUNNER_TEMP}"/chrome-apks/*.apk; do apksigner verify --print-certs "$apk"; done
+            adb install-multiple "${RUNNER_TEMP}"/chrome-apks/*.apk
+            adb shell dumpsys package com.android.chrome | grep -E 'versionName=|versionCode=|signatures=|flags='
             adb shell am set-debug-app --persistent com.android.chrome
             adb shell am start -W \
               -a android.intent.action.VIEW \
