@@ -742,6 +742,50 @@ def test_consumer_harvest_is_ready_and_idempotent(tmp_path, monkeypatch, capsys)
     assert len(capture_calls) == 1
 
 
+def test_consumer_harvest_uses_observed_version_during_staged_rollout(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    release = ConsumerChromeRelease(
+        channel="stable",
+        version="151.0.0.0",
+        platform="linux",
+    )
+    monkeypatch.setattr(
+        "fingerprint_harvester.cli.fetch_consumer_release",
+        lambda platform, channel, api_root: release,
+    )
+    samples = [make_sample(), make_sample(), make_sample()]
+    for sample in samples:
+        sample["browser"]["version"] = "150.0.0.0"
+    monkeypatch.setattr(
+        "fingerprint_harvester.cli._capture_samples",
+        lambda *arguments: samples,
+    )
+
+    result = main(
+        [
+            "harvest",
+            "--platform",
+            "linux",
+            "--workspace",
+            str(tmp_path / "harvester"),
+            "--samples",
+            "3",
+            "--allow-version-mismatch",
+        ]
+    )
+
+    assert result == 0
+    assert '"browser_version": "150.0.0.0"' in capsys.readouterr().out
+    bundle = tmp_path / "harvester" / "captures" / "stable" / "150.0.0.0" / "linux"
+    assert load_json(bundle / "manifest.json")["browser_distribution"] == (
+        "consumer-chrome"
+    )
+    assert load_json(bundle / "readiness.json")["ready"] is True
+
+
 def test_safe_extract_preserves_executable_mode(tmp_path):
     archive_path = tmp_path / "chrome.zip"
     destination = tmp_path / "extracted"

@@ -90,6 +90,7 @@ jobs:
             --platform "${{ matrix.chrome_platform }}" \
             --browser-mode headful \
             --samples 5 \
+            --allow-version-mismatch \
             --workspace "${RUNNER_TEMP}/fingerprint-harvester"
 
       - name: Capture headful Chrome on Windows or macOS
@@ -100,9 +101,11 @@ jobs:
           --platform "${{ matrix.chrome_platform }}"
           --browser-mode headful
           --samples 5
+          --allow-version-mismatch
           --workspace "${{ runner.temp }}/fingerprint-harvester"
 
       - name: Upload sanitized evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: chrome-${{ matrix.chrome_platform }}
@@ -157,10 +160,16 @@ jobs:
           fi
 
           mapfile -t majors < <(
-            printf '%s\n' "${manifests[@]}" |
-              xargs -n1 jq -r '.expected_release.version' |
-              cut -d. -f1 |
-              sort -u
+            for manifest in "${manifests[@]}"; do
+              jq -er '
+                .browser_identities
+                | map(.version)
+                | unique
+                | if length == 1 then .[0]
+                  else error("capture has inconsistent browser versions")
+                  end
+              ' "$(dirname "$manifest")/profile.json"
+            done | cut -d. -f1 | sort -u
           )
           if [[ ${#majors[@]} -ne 1 ]]; then
             echo "Consumer Stable has not reached the same major on every OS."

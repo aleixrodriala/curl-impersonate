@@ -98,6 +98,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     harvest.add_argument("--tls-url", default=DEFAULT_TLS_URL)
     harvest.add_argument("--http3-url", default=DEFAULT_HTTP3_URL)
+    harvest.add_argument(
+        "--allow-version-mismatch",
+        action="store_true",
+        help=(
+            "Capture installed consumer Chrome while the release feed and "
+            "download rollout disagree"
+        ),
+    )
 
     cft_harvest = subparsers.add_parser(
         "cft-harvest",
@@ -401,7 +409,18 @@ def _handle_harvest(args: argparse.Namespace) -> int:
         args.tls_url,
         args.http3_url,
     )
-    observed_version = _observed_version(samples, release.version)
+    observed_version = _observed_version(
+        samples,
+        release.version,
+        args.allow_version_mismatch,
+    )
+    bundle = (
+        args.workspace
+        / "captures"
+        / release.channel.lower()
+        / observed_version
+        / args.platform
+    )
     profile = write_capture_bundle(
         bundle,
         samples,
