@@ -3,7 +3,11 @@ name = "curl-impersonate-fingerprint-harvester"
 version = "0.1.0"
 description = "Capture and compile consumer browser wire fingerprints."
 requires-python = ">=3.10"
-dependencies = ["playwright>=1.60.0,<2.0"]
+dependencies = [
+  "gplaydl==2.1.5",
+  "httpx[socks]>=0.27.0,<1.0",
+  "playwright>=1.60.0,<2.0",
+]
 
 [project.optional-dependencies]
 dev = [

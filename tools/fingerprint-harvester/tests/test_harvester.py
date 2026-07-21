@@ -7,6 +7,10 @@ from zipfile import ZipFile, ZipInfo
 
 import pytest
 
+from fingerprint_harvester.android_play import (
+    authenticate_play,
+    build_x86_64_profile,
+)
 from fingerprint_harvester.bundle import load_json, write_capture_bundle
 from fingerprint_harvester.capabilities import analyze_capabilities
 from fingerprint_harvester.chrome_runner import (
@@ -37,6 +41,30 @@ from fingerprint_harvester.releases import (
     parse_version_history,
 )
 from fingerprint_harvester.replay import compare_replay
+
+
+def test_x86_64_play_profile_requests_only_x86_abis():
+    profile = build_x86_64_profile()
+
+    assert profile["Build.SUPPORTED_ABIS"] == "x86_64,x86"
+    assert profile["Platforms"] == "x86_64,x86"
+    assert "arm" not in profile["Platforms"]
+
+
+def test_x86_64_play_authentication_saves_token(monkeypatch):
+    saved = []
+    monkeypatch.setattr(
+        "fingerprint_harvester.android_play._fetch_x86_64_token",
+        lambda dispenser_url: {"authToken": "test-token"},
+    )
+    monkeypatch.setattr(
+        "fingerprint_harvester.android_play.save_auth",
+        lambda data, architecture: saved.append((data, architecture)),
+    )
+
+    authenticate_play("x86_64", "https://dispenser.example.test")
+
+    assert saved == [({"authToken": "test-token"}, "x86_64")]
 
 
 def make_trackme(

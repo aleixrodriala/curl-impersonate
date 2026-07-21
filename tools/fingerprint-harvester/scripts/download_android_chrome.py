@@ -6,8 +6,10 @@ import json
 from pathlib import Path
 
 from gplaydl.api import get_delivery, get_details, purchase
-from gplaydl.auth import ensure_auth
+from gplaydl.auth import load_cached_auth
 from gplaydl.download import DownloadSpec, download_batch
+
+from fingerprint_harvester.android_play import SUPPORTED_ARCHITECTURES
 
 
 CHROME_PACKAGE = "com.android.chrome"
@@ -17,11 +19,12 @@ TRICHROME_PACKAGE = "com.google.android.trichromelibrary"
 def _delivery_specs(
     package: str,
     version_code: int,
+    auth: dict,
     output: Path,
     prefix: str,
     include_splits: bool,
 ) -> list[DownloadSpec]:
-    delivery = get_delivery(package, version_code, ensure_auth("arm64"))
+    delivery = get_delivery(package, version_code, auth)
     specs = [
         DownloadSpec(
             url=delivery.download_url,
@@ -45,11 +48,12 @@ def _delivery_specs(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--arch", choices=SUPPORTED_ARCHITECTURES, required=True)
     args = parser.parse_args()
 
-    auth = ensure_auth("arm64")
-    if not auth:
-        raise RuntimeError("Google Play authentication is unavailable")
+    auth = load_cached_auth(args.arch)
+    if not auth or not auth.get("authToken"):
+        raise RuntimeError(f"Google Play authentication is unavailable for {args.arch}")
     details = get_details(CHROME_PACKAGE, auth)
     purchase(CHROME_PACKAGE, details.version_code, auth)
 
@@ -57,6 +61,7 @@ def main() -> int:
     specs = _delivery_specs(
         TRICHROME_PACKAGE,
         details.version_code,
+        auth,
         args.output,
         "trichrome",
         include_splits=False,
@@ -65,6 +70,7 @@ def main() -> int:
         _delivery_specs(
             CHROME_PACKAGE,
             details.version_code,
+            auth,
             args.output,
             "chrome",
             include_splits=True,
@@ -74,6 +80,7 @@ def main() -> int:
 
     metadata = {
         "package": CHROME_PACKAGE,
+        "architecture": args.arch,
         "version": details.version_string,
         "version_code": details.version_code,
     }

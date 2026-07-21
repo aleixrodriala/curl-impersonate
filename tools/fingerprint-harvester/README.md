@@ -125,8 +125,10 @@ uv run --project tools/fingerprint-harvester \
 
 The hosted workflow downloads Chrome and its exact-version Trichrome shared
 library directly from Google Play, verifies their signatures, installs them on
-an ARM64 Android emulator, and deletes the proprietary packages with the
-ephemeral runner. Only sanitized fingerprint evidence is uploaded.
+an x86_64 Android emulator with KVM acceleration, and deletes the proprietary
+packages with the ephemeral runner. Only sanitized fingerprint evidence is
+uploaded. The Play device profile explicitly requests Google's x86_64 package
+variant, so no ARM translation layer is involved.
 
 ## Bundle contract
 
@@ -220,8 +222,8 @@ in the profile commit.
 The workflow intentionally does not tag or release.
 
 `safari-fingerprint-harvest.yml` uses GitHub-hosted macOS and iOS Simulator
-runners. `android-fingerprint-harvest.yml` uses the ARM64 `macos-15` runner
-so Play-delivered ARM64 Chrome executes without native-code translation. The
+runners. `android-fingerprint-harvest.yml` uses an x86_64 Ubuntu runner with
+KVM, plus Google's Play-delivered x86_64 Chrome and Trichrome packages. The
 Android workflow first attempts anonymous Play authentication directly. If the
 dispenser rejects GitHub's datacenter address, only the token request is sent
 through an ephemeral Tor process; signed package delivery remains direct from
