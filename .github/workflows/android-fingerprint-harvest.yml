@@ -29,11 +29,24 @@ jobs:
           java-version: "21"
 
       - name: Authenticate to Google Play
+        env:
+          GPLAY_AUTH_B64: ${{ secrets.GPLAY_AUTH_B64 }}
+          GPLAY_DISPENSER_URL: ${{ secrets.GPLAY_DISPENSER_URL }}
         run: |
           python -m pip install gplaydl==2.1.5 uv
+          if [[ -n "$GPLAY_AUTH_B64" ]]; then
+            mkdir -p "${HOME}/.config/gplaydl"
+            printf '%s' "$GPLAY_AUTH_B64" | base64 -D \
+              > "${HOME}/.config/gplaydl/auth-arm64.json"
+            exit 0
+          fi
           authenticated=false
           for attempt in 1 2 3 4 5; do
-            if gplaydl auth >/dev/null; then
+            dispenser=()
+            if [[ -n "$GPLAY_DISPENSER_URL" ]]; then
+              dispenser=(--dispenser "$GPLAY_DISPENSER_URL")
+            fi
+            if gplaydl auth "${dispenser[@]}" >/dev/null; then
               authenticated=true
               break
             fi
