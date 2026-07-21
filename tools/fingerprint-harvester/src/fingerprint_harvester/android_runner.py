@@ -119,6 +119,14 @@ class AndroidChromeRunner:
         self._playwright_manager = None
 
     def _enable_test_launch(self) -> None:
+        self._adb(
+            "shell",
+            "settings",
+            "put",
+            "global",
+            "adb_enabled",
+            "1",
+        )
         self._adb("shell", "am", "set-debug-app", "--persistent", self.package)
         command_line = (
             "chrome --disable-fre --enable-remote-debugging "

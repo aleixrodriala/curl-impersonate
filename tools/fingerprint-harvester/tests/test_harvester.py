@@ -71,8 +71,10 @@ def test_x86_64_play_authentication_saves_token(monkeypatch):
 def test_android_test_launch_enables_remote_debugging():
     runner = AndroidChromeRunner()
     command_line = []
+    adb_calls = []
 
     def fake_adb(*arguments, **kwargs):
+        adb_calls.append(arguments)
         if arguments[0] == "push":
             command_line.append(Path(arguments[1]).read_text(encoding="utf-8"))
         return ""
@@ -82,6 +84,14 @@ def test_android_test_launch_enables_remote_debugging():
 
     assert "--disable-fre" in command_line[0]
     assert "--enable-remote-debugging" in command_line[0]
+    assert (
+        "shell",
+        "settings",
+        "put",
+        "global",
+        "adb_enabled",
+        "1",
+    ) in adb_calls
 
 
 def test_android_url_launch_targets_chrome_main_activity():
