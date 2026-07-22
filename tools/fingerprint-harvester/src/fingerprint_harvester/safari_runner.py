@@ -242,29 +242,30 @@ class SafariRunner:
     def _capture_ios_sample(
         self,
         tls_url: str,
-        http3_url: str,
+        http3_url: str | None,
     ) -> dict[str, Any]:
         if not self.ios_device_udid or not self.ios_version:
             raise SafariRunnerError("iOS Safari runner is not initialized")
         with tempfile.TemporaryDirectory(prefix="ios-safari-capture-") as directory:
             output = Path(directory) / "sample.json"
+            command = [
+                "node",
+                str(self._ios_helper),
+                "--udid",
+                self.ios_device_udid,
+                "--platform-version",
+                self.ios_version,
+                "--device-type",
+                self.ios_device_type,
+                "--tls-url",
+                tls_url,
+                "--output",
+                str(output),
+            ]
+            if http3_url:
+                command.extend(["--http3-url", http3_url])
             completed = subprocess.run(
-                [
-                    "node",
-                    str(self._ios_helper),
-                    "--udid",
-                    self.ios_device_udid,
-                    "--platform-version",
-                    self.ios_version,
-                    "--device-type",
-                    self.ios_device_type,
-                    "--tls-url",
-                    tls_url,
-                    "--http3-url",
-                    http3_url,
-                    "--output",
-                    str(output),
-                ],
+                command,
                 capture_output=True,
                 text=True,
                 timeout=180,
@@ -313,7 +314,7 @@ class SafariRunner:
     def capture_sample(
         self,
         tls_url: str = DEFAULT_TLS_URL,
-        http3_url: str = DEFAULT_HTTP3_URL,
+        http3_url: str | None = DEFAULT_HTTP3_URL,
     ) -> dict[str, Any]:
         if self.platform == "ios":
             return self._capture_ios_sample(tls_url, http3_url)
@@ -344,12 +345,13 @@ class SafariRunner:
                 raise SafariRunnerError("Safari returned invalid browser identity data")
 
             http3_payload = None
-            for _ in range(6):
-                self._client.navigate(session_id, http3_url)
-                candidate = _read_json_body(self._client, session_id)
-                if candidate.get("protocol") == "http3":
-                    http3_payload = candidate
-                    break
+            if http3_url:
+                for _ in range(6):
+                    self._client.navigate(session_id, http3_url)
+                    candidate = _read_json_body(self._client, session_id)
+                    if candidate.get("protocol") == "http3":
+                        http3_payload = candidate
+                        break
             platform_version = capabilities.get("safari:platformVersion")
             observed_version = (
                 str(platform_version)

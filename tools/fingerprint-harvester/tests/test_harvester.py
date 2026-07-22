@@ -822,6 +822,7 @@ def test_ios_safari_capture_uses_webkit_helper(monkeypatch, tmp_path):
     }
 
     def run(command, **kwargs):
+        assert "--http3-url" not in command
         output_path = Path(command[command.index("--output") + 1])
         output_path.write_text(json.dumps(output))
         return subprocess.CompletedProcess(command, 0, "", "")
@@ -842,7 +843,7 @@ def test_ios_safari_capture_uses_webkit_helper(monkeypatch, tmp_path):
     ) as runner:
         sample = runner.capture_sample(
             "https://tls.example.test",
-            "https://http3.example.test",
+            None,
         )
 
     assert sample == output

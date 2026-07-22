@@ -95,6 +95,7 @@ jobs:
           uv run --project tools/fingerprint-harvester \
             curl-impersonate-harvest safari-capture \
             --platform macos \
+            --http2-only \
             --samples 5 \
             --output "${RUNNER_TEMP}/fingerprint-harvester/macos"
 
@@ -104,6 +105,7 @@ jobs:
           uv run --project tools/fingerprint-harvester \
             curl-impersonate-harvest safari-capture \
             --platform ios \
+            --http2-only \
             --samples 5 \
             --output "${RUNNER_TEMP}/fingerprint-harvester/ios"
 

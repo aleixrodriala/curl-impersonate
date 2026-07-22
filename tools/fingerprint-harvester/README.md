@@ -98,6 +98,7 @@ Chromium. A fresh WebDriver session is created for every sample:
 uv run --project tools/fingerprint-harvester \
   curl-impersonate-harvest safari-capture \
   --platform macos \
+  --http2-only \
   --samples 5 \
   --output captures/safari-macos
 ~~~
@@ -113,6 +114,7 @@ npm ci --prefix tools/fingerprint-harvester
 uv run --project tools/fingerprint-harvester \
   curl-impersonate-harvest safari-capture \
   --platform ios \
+  --http2-only \
   --ios-version 26.5 \
   --ios-device-udid SIMULATOR_UDID \
   --samples 5 \
@@ -121,8 +123,10 @@ uv run --project tools/fingerprint-harvester \
 
 Every sample terminates and opens MobileSafari afresh. The network request is
 still made by MobileSafari; the inspector only reads the collector response.
-Safari may be HTTP/2-only at the collectors, and absence of HTTP/3 is retained
-as evidence rather than synthesized.
+The maintained native Safari presets select HTTP/2, so the scheduled release
+gate uses `--http2-only`. Omitting that flag captures HTTP/3 as diagnostic
+evidence too; readiness continues to fail closed if randomized QUIC behavior
+cannot be represented by the native fork.
 
 ## Android Chrome capture
 

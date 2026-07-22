@@ -16,7 +16,7 @@ const {values} = parseArgs({
   },
 });
 
-for (const name of ["udid", "platform-version", "tls-url", "http3-url", "output"]) {
+for (const name of ["udid", "platform-version", "tls-url", "output"]) {
   if (!values[name]) {
     throw new Error(`Missing required --${name}`);
   }
@@ -146,12 +146,14 @@ async function main() {
     ]);
 
     let http3Payload = null;
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      await remoteDebugger.navToUrl(values["http3-url"]);
-      const candidate = await readJsonBody(remoteDebugger);
-      if (candidate.protocol === "http3") {
-        http3Payload = candidate;
-        break;
+    if (values["http3-url"]) {
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        await remoteDebugger.navToUrl(values["http3-url"]);
+        const candidate = await readJsonBody(remoteDebugger);
+        if (candidate.protocol === "http3") {
+          http3Payload = candidate;
+          break;
+        }
       }
     }
 
@@ -179,7 +181,7 @@ async function main() {
       },
       source_urls: {
         tls_http2: values["tls-url"],
-        http3: values["http3-url"],
+        http3: values["http3-url"] ?? null,
       },
     };
     await writeFile(values.output, JSON.stringify(sample, null, 2));

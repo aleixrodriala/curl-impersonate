@@ -137,6 +137,11 @@ def build_parser() -> argparse.ArgumentParser:
     safari_capture.add_argument("--ios-device-name")
     safari_capture.add_argument("--ios-device-udid")
     safari_capture.add_argument("--ios-device-type", default="iPhone")
+    safari_capture.add_argument(
+        "--http2-only",
+        action="store_true",
+        help="Capture the HTTP/2 fingerprint used by native Safari presets",
+    )
     safari_capture.add_argument("--tls-url", default=DEFAULT_TLS_URL)
     safari_capture.add_argument("--http3-url", default=DEFAULT_HTTP3_URL)
 
@@ -555,7 +560,7 @@ def _capture_safari_samples(
     sample_count: int,
     platform: str,
     tls_url: str,
-    http3_url: str,
+    http3_url: str | None,
     ios_version: str | None,
     ios_device_name: str | None,
     ios_device_udid: str | None,
@@ -597,7 +602,7 @@ def _handle_safari_capture(args: argparse.Namespace) -> int:
         args.samples,
         args.platform,
         args.tls_url,
-        args.http3_url,
+        None if args.http2_only else args.http3_url,
         args.ios_version,
         args.ios_device_name,
         args.ios_device_udid,
