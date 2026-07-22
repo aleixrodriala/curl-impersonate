@@ -7,6 +7,7 @@ from typing import Any
 
 
 GREASE = "GREASE"
+VOLATILE_QUIC_TRANSPORT_PARAMETER_IDS = {12583}
 EXTENSION_ID_PATTERN = re.compile(r"\((\d+)\)$")
 UNKNOWN_EXTENSION_PATTERN = re.compile(r"Unknown extension (\d+)$")
 
@@ -234,6 +235,10 @@ def _normalize_transport_parameters(items: object) -> list[dict[str, object]]:
         name = str(item.get("name", ""))
         parameter_id: object = item.get("id")
         value: object = item.get("value")
+        # Chrome conditionally sends initial_rtt from cached network state. It is
+        # runtime evidence, not part of the browser's stable impersonation profile.
+        if parameter_id in VOLATILE_QUIC_TRANSPORT_PARAMETER_IDS:
+            continue
         if "GREASE" in name.upper():
             parameter_id = GREASE
             name = GREASE
@@ -255,6 +260,20 @@ def _normalize_transport_parameters(items: object) -> list[dict[str, object]]:
             value = normalized_value
         parameters.append({"id": parameter_id, "name": name, "value": value})
     return parameters
+
+
+def _normalize_http3_perk(value: object) -> str:
+    perk = str(value or "")
+    sections = perk.split("|")
+    if len(sections) != 3:
+        return perk
+    sections[2] = ";".join(
+        parameter
+        for parameter in sections[2].split(";")
+        if parameter.split(":", 1)[0]
+        not in {str(item) for item in VOLATILE_QUIC_TRANSPORT_PARAMETER_IDS}
+    )
+    return "|".join(sections)
 
 
 def _transport_parameter_sort_key(parameter: dict[str, object]) -> tuple[int, str]:
@@ -347,17 +366,16 @@ def normalize_http3(payload: dict[str, Any]) -> dict[str, Any]:
 
     ja3n = tls.get("ja3n")
     ja3n = ja3n if isinstance(ja3n, dict) else {}
+    perk = _normalize_http3_perk(http3.get("perk_text_normalized", ""))
     return {
         "protocol": "http3",
         "http3": {
-            "perk": http3.get("perk_text_normalized", ""),
-            "perk_hash": http3.get("perk_hash_normalized", ""),
-            "settings": settings,
-            "pseudo_header_order": str(http3.get("perk_text_normalized", "")).split(
-                "|"
-            )[1]
-            if str(http3.get("perk_text_normalized", "")).count("|") >= 2
+            "perk": perk,
+            "perk_hash": hashlib.md5(perk.encode(), usedforsecurity=False).hexdigest()
+            if perk
             else "",
+            "settings": settings,
+            "pseudo_header_order": perk.split("|")[1] if perk.count("|") >= 2 else "",
             "headers": _normalize_headers(header_lines),
         },
         "tls": {

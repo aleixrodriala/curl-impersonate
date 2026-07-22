@@ -773,6 +773,35 @@ def test_grease_version_order_does_not_create_a_variant():
     assert build_profile([first, second])["variant_count"] == 1
 
 
+def test_cached_initial_rtt_does_not_create_a_variant():
+    first = make_sample()
+    second = deepcopy(first)
+    transport = next(
+        extension
+        for extension in second["http3"]["tls"]["extensions"]
+        if extension["id"] == 57
+    )
+    transport["data"].append({"id": 12583, "name": "initial_rtt", "value": 72383})
+    second["http3"]["http3"]["perk_text_normalized"] = second["http3"]["http3"][
+        "perk_text_normalized"
+    ].replace(";12584:", ";12583:AUTO;12584:")
+    second["http3"]["http3"]["perk_hash_normalized"] = "volatile-hash"
+
+    profile = build_profile([first, second])
+
+    assert profile["variant_count"] == 1
+    assert profile["selected_sample_count"] == 2
+    normalized_transport = next(
+        extension
+        for extension in profile["fingerprint"]["http3"]["tls"]["extensions"]
+        if extension["id"] == 57
+    )
+    assert all(
+        parameter["id"] != 12583 for parameter in normalized_transport["parameters"]
+    )
+    assert "12583:" not in profile["fingerprint"]["http3"]["http3"]["perk"]
+
+
 def test_capability_report_fails_closed_for_chrome_151_extensions():
     sample = make_sample(extra_extensions=[(4832, "0000"), (51764, "0000")])
     profile = build_profile([sample, deepcopy(sample), deepcopy(sample)])
