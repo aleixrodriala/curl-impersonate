@@ -179,9 +179,31 @@ class SafariRunner:
         self._log_handle: BinaryIO | None = None
         self._log_path: Path | None = None
 
+    @property
+    def _ios_helper(self) -> Path:
+        return Path(__file__).with_name("ios_safari_capture.mjs")
+
     def __enter__(self) -> "SafariRunner":
         if sys.platform != "darwin":
             raise SafariRunnerError("Real Safari capture requires macOS")
+        if self.platform == "ios":
+            self.ios_device_udid = self.ios_device_udid or os.environ.get(
+                "IOS_DEVICE_UDID"
+            )
+            self.ios_version = self.ios_version or os.environ.get("IOS_RUNTIME_VERSION")
+            if not self.ios_device_udid:
+                raise SafariRunnerError(
+                    "iOS Safari capture requires an iOS Simulator UDID"
+                )
+            if not self.ios_version:
+                raise SafariRunnerError(
+                    "iOS Safari capture requires the iOS runtime version"
+                )
+            if not self._ios_helper.is_file():
+                raise SafariRunnerError(
+                    f"iOS Safari helper is missing: {self._ios_helper}"
+                )
+            return self
         if not self.driver.is_file() or not os.access(self.driver, os.X_OK):
             raise SafariRunnerError(f"SafariDriver is not executable: {self.driver}")
         self.version, self.build = _safari_version(self.driver)
@@ -217,6 +239,52 @@ class SafariRunner:
         self._process = None
         self._log_handle = None
 
+    def _capture_ios_sample(
+        self,
+        tls_url: str,
+        http3_url: str,
+    ) -> dict[str, Any]:
+        if not self.ios_device_udid or not self.ios_version:
+            raise SafariRunnerError("iOS Safari runner is not initialized")
+        with tempfile.TemporaryDirectory(prefix="ios-safari-capture-") as directory:
+            output = Path(directory) / "sample.json"
+            completed = subprocess.run(
+                [
+                    "node",
+                    str(self._ios_helper),
+                    "--udid",
+                    self.ios_device_udid,
+                    "--platform-version",
+                    self.ios_version,
+                    "--device-type",
+                    self.ios_device_type,
+                    "--tls-url",
+                    tls_url,
+                    "--http3-url",
+                    http3_url,
+                    "--output",
+                    str(output),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+            if completed.returncode != 0:
+                details = (completed.stderr or completed.stdout).strip()
+                raise SafariRunnerError(
+                    "iOS WebKit remote-debugger capture failed: "
+                    f"{details or f'exit status {completed.returncode}'}"
+                )
+            try:
+                sample = json.loads(output.read_text())
+            except (OSError, json.JSONDecodeError) as exc:
+                raise SafariRunnerError(
+                    "iOS WebKit remote-debugger returned no valid sample"
+                ) from exc
+        if not isinstance(sample, dict):
+            raise SafariRunnerError("iOS Safari helper returned a non-object sample")
+        return sample
+
     def _driver_log_tail(self) -> str:
         if self._log_handle is not None:
             self._log_handle.flush()
@@ -247,6 +315,8 @@ class SafariRunner:
         tls_url: str = DEFAULT_TLS_URL,
         http3_url: str = DEFAULT_HTTP3_URL,
     ) -> dict[str, Any]:
+        if self.platform == "ios":
+            return self._capture_ios_sample(tls_url, http3_url)
         if self._client is None:
             raise SafariRunnerError("SafariRunner must be used as a context manager")
         try:

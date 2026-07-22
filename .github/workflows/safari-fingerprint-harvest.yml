@@ -61,8 +61,7 @@ jobs:
           open -a Simulator --args -CurrentDeviceUDID "$device_udid"
           xcrun simctl bootstatus "$device_udid" -b
 
-          # Apple requires both settings on every iOS target, in addition to
-          # enabling safaridriver on the host Mac.
+          # Ensure MobileSafari exposes its Web Inspector socket before capture.
           xcrun simctl spawn "$device_udid" defaults write \
             com.apple.webinspectord RemoteInspectorEnabled -bool true
           xcrun simctl spawn "$device_udid" defaults write \
@@ -77,12 +76,18 @@ jobs:
           echo "IOS_RUNTIME_VERSION=$ios_version" >> "$GITHUB_ENV"
 
       - name: Enable Safari WebDriver
+        if: matrix.platform == 'macos'
         run: sudo safaridriver --enable
 
       - name: Install harvester
         run: |
           python -m pip install uv
           uv sync --project tools/fingerprint-harvester
+
+      - name: Install iOS WebKit inspector client
+        if: matrix.platform == 'ios'
+        working-directory: tools/fingerprint-harvester
+        run: npm ci
 
       - name: Capture macOS Safari
         if: matrix.platform == 'macos'
@@ -102,7 +107,7 @@ jobs:
             --samples 5 \
             --output "${RUNNER_TEMP}/fingerprint-harvester/ios"
 
-      - name: Collect native SafariDriver diagnostics
+      - name: Collect iOS Safari diagnostics
         if: failure() && matrix.platform == 'ios'
         run: |
           set -euo pipefail

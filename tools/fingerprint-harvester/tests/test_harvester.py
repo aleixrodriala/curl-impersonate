@@ -814,6 +814,40 @@ def test_ios_safari_capture_uses_minimal_simulator_capabilities():
     }
 
 
+def test_ios_safari_capture_uses_webkit_helper(monkeypatch, tmp_path):
+    output = {
+        "browser": {"version": "26.5"},
+        "tls_http2": {"protocol": "h2"},
+        "http3": {"protocol": "http3"},
+    }
+
+    def run(command, **kwargs):
+        output_path = Path(command[command.index("--output") + 1])
+        output_path.write_text(json.dumps(output))
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr("fingerprint_harvester.safari_runner.sys.platform", "darwin")
+    monkeypatch.setattr("fingerprint_harvester.safari_runner.subprocess.run", run)
+    monkeypatch.setattr(
+        SafariRunner,
+        "_ios_helper",
+        property(lambda self: tmp_path / "ios_safari_capture.mjs"),
+    )
+    (tmp_path / "ios_safari_capture.mjs").write_text("// test")
+
+    with SafariRunner(
+        platform="ios",
+        ios_version="26.5",
+        ios_device_udid="test-udid",
+    ) as runner:
+        sample = runner.capture_sample(
+            "https://tls.example.test",
+            "https://http3.example.test",
+        )
+
+    assert sample == output
+
+
 def test_capability_report_fails_closed_for_chrome_151_extensions():
     sample = make_sample(extra_extensions=[(4832, "0000"), (51764, "0000")])
     profile = build_profile([sample, deepcopy(sample), deepcopy(sample)])

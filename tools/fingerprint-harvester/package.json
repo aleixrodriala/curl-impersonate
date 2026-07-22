@@ -1,0 +1,13 @@
+{
+  "name": "curl-impersonate-ios-safari-harvester",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "appium-ios-simulator": "8.2.8",
+    "appium-remote-debugger": "15.10.9"
+  },
+  "overrides": {
+    "body-parser": "2.3.0",
+    "shell-quote": "1.10.0"
+  }
+}

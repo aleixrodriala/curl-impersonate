@@ -91,8 +91,8 @@ Chrome-for-Testing bundles always report ready: false.
 
 ## Safari capture
 
-Use the platform SafariDriver rather than substituting Chromium. A fresh
-WebDriver session is created for every sample:
+macOS capture uses the platform SafariDriver rather than substituting
+Chromium. A fresh WebDriver session is created for every sample:
 
 ~~~sh
 uv run --project tools/fingerprint-harvester \
@@ -102,10 +102,27 @@ uv run --project tools/fingerprint-harvester \
   --output captures/safari-macos
 ~~~
 
-The `ios` platform uses an explicitly booted iOS Simulator and accepts its
-device name, UDID, and runtime version as command-line options. Safari may be
-HTTP/2-only at the collectors; absence of HTTP/3 is retained as evidence rather
-than synthesized.
+The `ios` platform uses an explicitly booted iOS Simulator and the real
+MobileSafari process. It controls the browser through Appium's maintained
+WebKit inspector client because SafariDriver only supports connected iOS
+devices reliably on hosted runners. Install the pinned client before capture:
+
+~~~sh
+npm ci --prefix tools/fingerprint-harvester
+
+uv run --project tools/fingerprint-harvester \
+  curl-impersonate-harvest safari-capture \
+  --platform ios \
+  --ios-version 26.5 \
+  --ios-device-udid SIMULATOR_UDID \
+  --samples 5 \
+  --output captures/safari-ios
+~~~
+
+Every sample terminates and opens MobileSafari afresh. The network request is
+still made by MobileSafari; the inspector only reads the collector response.
+Safari may be HTTP/2-only at the collectors, and absence of HTTP/3 is retained
+as evidence rather than synthesized.
 
 ## Android Chrome capture
 
@@ -225,8 +242,9 @@ in the profile commit.
 
 The workflow intentionally does not tag or release.
 
-`safari-fingerprint-harvest.yml` uses GitHub-hosted macOS and iOS Simulator
-runners. `android-fingerprint-harvest.yml` uses an x86_64 Ubuntu runner with
+`safari-fingerprint-harvest.yml` uses GitHub-hosted macOS for desktop Safari and
+an Apple-silicon macOS runner for an iOS Simulator with real MobileSafari.
+`android-fingerprint-harvest.yml` uses an x86_64 Ubuntu runner with
 KVM. It discovers Android releases from Google's VersionHistory API, downloads
 the matching x86_64 bundle through a real Chrome session, and rejects anything
 that does not carry Google's pinned Chrome certificate. This avoids Play rollout

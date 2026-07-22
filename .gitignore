@@ -1,6 +1,7 @@
 build/
 .freebsd-vm/
 **/__pycache__
+**/node_modules/
 config.log
 config.status
 .DS_Store
