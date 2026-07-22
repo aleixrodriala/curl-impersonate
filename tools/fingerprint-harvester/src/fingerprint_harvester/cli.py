@@ -1,6 +1,7 @@
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -293,11 +294,23 @@ def _capture_samples(
         headless=browser_mode == "headless",
     ) as runner:
         for index in range(sample_count):
-            print(
-                f"Capturing fresh Chrome profile {index + 1}/{sample_count}...",
-                file=sys.stderr,
-            )
-            samples.append(runner.capture_sample(tls_url, http3_url))
+            for attempt in range(1, 4):
+                print(
+                    f"Capturing fresh Chrome profile {index + 1}/{sample_count} "
+                    f"(attempt {attempt}/3)...",
+                    file=sys.stderr,
+                )
+                try:
+                    samples.append(runner.capture_sample(tls_url, http3_url))
+                    break
+                except Exception as exc:
+                    if attempt == 3:
+                        raise
+                    print(
+                        f"Capture attempt {attempt}/3 failed: {exc}",
+                        file=sys.stderr,
+                    )
+                    time.sleep(attempt)
     return samples
 
 
@@ -538,24 +551,58 @@ def _handle_cft_harvest(args: argparse.Namespace) -> int:
     return 1
 
 
+def _capture_safari_samples(
+    sample_count: int,
+    platform: str,
+    tls_url: str,
+    http3_url: str,
+    ios_version: str | None,
+    ios_device_name: str | None,
+    ios_device_udid: str | None,
+    ios_device_type: str,
+) -> list[dict[str, Any]]:
+    samples: list[dict[str, Any]] = []
+    for index in range(sample_count):
+        for attempt in range(1, 4):
+            print(
+                f"Capturing fresh {platform} Safari session "
+                f"{index + 1}/{sample_count} (attempt {attempt}/3)...",
+                file=sys.stderr,
+            )
+            try:
+                with SafariRunner(
+                    platform=platform,
+                    ios_version=ios_version,
+                    ios_device_name=ios_device_name,
+                    ios_device_udid=ios_device_udid,
+                    ios_device_type=ios_device_type,
+                ) as runner:
+                    samples.append(runner.capture_sample(tls_url, http3_url))
+                break
+            except Exception as exc:
+                if attempt == 3:
+                    raise
+                print(
+                    f"Safari capture attempt {attempt}/3 failed: {exc}",
+                    file=sys.stderr,
+                )
+                time.sleep(attempt * 2)
+    return samples
+
+
 def _handle_safari_capture(args: argparse.Namespace) -> int:
     if args.samples < 3:
         raise ValueError("safari-capture requires --samples of at least three")
-    samples: list[dict[str, Any]] = []
-    with SafariRunner(
-        platform=args.platform,
-        ios_version=args.ios_version,
-        ios_device_name=args.ios_device_name,
-        ios_device_udid=args.ios_device_udid,
-        ios_device_type=args.ios_device_type,
-    ) as runner:
-        for index in range(args.samples):
-            print(
-                f"Capturing fresh {args.platform} Safari session "
-                f"{index + 1}/{args.samples}...",
-                file=sys.stderr,
-            )
-            samples.append(runner.capture_sample(args.tls_url, args.http3_url))
+    samples = _capture_safari_samples(
+        args.samples,
+        args.platform,
+        args.tls_url,
+        args.http3_url,
+        args.ios_version,
+        args.ios_device_name,
+        args.ios_device_udid,
+        args.ios_device_type,
+    )
     observed_version = _observed_version(samples, None)
     distribution = (
         "consumer-safari-ios" if args.platform == "ios" else "consumer-safari"

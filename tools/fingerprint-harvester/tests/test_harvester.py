@@ -26,7 +26,12 @@ from fingerprint_harvester.chrome_runner import (
     _wait_for_port_file,
     find_chrome_binary,
 )
-from fingerprint_harvester.cli import _capture_summary, main
+from fingerprint_harvester.cli import (
+    _capture_safari_samples,
+    _capture_samples,
+    _capture_summary,
+    main,
+)
 from fingerprint_harvester.compiler import (
     candidate_from_bundle,
     extract_initializer,
@@ -542,6 +547,80 @@ def test_chrome_binary_validation_and_launch_arguments(tmp_path):
     assert arguments[0] == str(binary)
     assert "--headless=new" in arguments
     assert not any("automation" in argument.lower() for argument in arguments)
+
+
+def test_capture_samples_retries_transient_browser_failures(monkeypatch):
+    calls = []
+
+    class Runner:
+        def __init__(self, **kwargs):
+            calls.append(("init", kwargs))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def capture_sample(self, tls_url, http3_url):
+            calls.append(("capture", tls_url, http3_url))
+            attempts = len([call for call in calls if call[0] == "capture"])
+            if attempts < 3:
+                raise ChromeRunnerError("transient CDP failure")
+            return {"browser": {"version": "150.0.0.0"}}
+
+    monkeypatch.setattr("fingerprint_harvester.cli.ChromeRunner", Runner)
+    monkeypatch.setattr("fingerprint_harvester.cli.time.sleep", lambda _: None)
+
+    samples = _capture_samples(
+        1,
+        None,
+        "headful",
+        "https://tls.example.test",
+        "https://http3.example.test",
+    )
+
+    assert samples == [{"browser": {"version": "150.0.0.0"}}]
+    assert len([call for call in calls if call[0] == "capture"]) == 3
+
+
+def test_safari_capture_restarts_driver_after_transient_failure(monkeypatch):
+    calls = []
+
+    class Runner:
+        def __init__(self, **kwargs):
+            calls.append(("init", kwargs))
+
+        def __enter__(self):
+            calls.append(("enter",))
+            return self
+
+        def __exit__(self, *args):
+            calls.append(("exit",))
+
+        def capture_sample(self, tls_url, http3_url):
+            calls.append(("capture", tls_url, http3_url))
+            attempts = len([call for call in calls if call[0] == "capture"])
+            if attempts == 1:
+                raise ConnectionError("SafariDriver closed the connection")
+            return {"browser": {"version": "26.5"}}
+
+    monkeypatch.setattr("fingerprint_harvester.cli.SafariRunner", Runner)
+    monkeypatch.setattr("fingerprint_harvester.cli.time.sleep", lambda _: None)
+
+    samples = _capture_safari_samples(
+        1,
+        "ios",
+        "https://tls.example.test",
+        "https://http3.example.test",
+        "26.5",
+        "iPhone 17",
+        "test-udid",
+        "iPhone",
+    )
+
+    assert samples == [{"browser": {"version": "26.5"}}]
+    assert len([call for call in calls if call[0] == "init"]) == 2
 
 
 def test_chrome_binary_must_be_executable(tmp_path):

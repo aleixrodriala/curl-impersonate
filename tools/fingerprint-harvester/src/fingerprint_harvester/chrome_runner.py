@@ -242,7 +242,11 @@ class ChromeRunner:
             raise ChromeRunnerError("ChromeRunner must be used as a context manager")
         with TemporaryDirectory(prefix="curl-cffi-fingerprint-") as temporary:
             profile = Path(temporary) / "profile"
-            process = self._launch(profile, tls_url)
+            # Attaching while the initial target is loading a remote collector can
+            # leave Playwright waiting for target initialization until its CDP
+            # timeout. Attach to a local page first, then let Chrome open the
+            # collector through its command line as a browser-native navigation.
+            process = self._launch(profile, "about:blank")
             browser = None
             try:
                 port = _wait_for_port_file(
@@ -259,6 +263,7 @@ class ChromeRunner:
                 if not browser.contexts or not browser.contexts[0].pages:
                     raise ChromeRunnerError("Chrome exposed no default page over CDP")
                 context = browser.contexts[0]
+                self._open_url_from_command_line(profile, tls_url)
                 page = self._wait_for_page(context, tls_url)
                 tls_payload = _read_json_body(page)
                 browser_data = {
@@ -301,7 +306,9 @@ class ChromeRunner:
                             argument
                             if not argument.startswith("--user-data-dir=")
                             else "--user-data-dir=REDACTED"
-                            for argument in self._launch_arguments(profile, tls_url)[1:]
+                            for argument in self._launch_arguments(
+                                profile, "about:blank"
+                            )[1:]
                         ],
                         "collector_navigation": "command-line",
                     },
