@@ -22,7 +22,7 @@ jobs:
         include:
           - os: macos-15
             platform: macos
-          - os: macos-26-intel
+          - os: macos-26
             platform: ios
     steps:
       - uses: actions/checkout@v4
