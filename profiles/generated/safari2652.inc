@@ -58,7 +58,7 @@
     .http2_stream_weight = 256,
     .http2_stream_exclusive = 0,
     .ech = "false",
-    .tls_extension_order = "0-23-65281-10-11-16-5-13-18-51-45-43-27-21",
+    .tls_extension_order = "0-23-65281-10-11-16-5-13-18-51-45-43-27",
     .tls_use_new_alps_codepoint = false,
     .tls_signed_cert_timestamps = true,
     .tls_grease = true,

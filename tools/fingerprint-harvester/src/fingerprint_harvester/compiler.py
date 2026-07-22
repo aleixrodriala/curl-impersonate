@@ -403,6 +403,16 @@ def _fixed_order(value: object, field: str) -> list[object]:
     return first
 
 
+def _native_extension_order(value: object, field: str) -> str:
+    # BoringSSL creates TLS padding dynamically and rejects extension 21 in an
+    # explicit allowlist. Keep it in capture evidence, but not native config.
+    return "-".join(
+        str(item)
+        for item in _fixed_order(value, field)
+        if item != "GREASE" and str(item) != "21"
+    )
+
+
 def _native_cipher_name(cipher: object) -> str:
     value = str(cipher)
     return NATIVE_CIPHER_NAMES.get(value, value)
@@ -485,11 +495,7 @@ def candidate_from_bundle(bundle: Path, target: str) -> dict[str, Any]:
         "tls_extension_order": (
             None
             if tcp_order_mode == "permuted"
-            else "-".join(
-                str(item)
-                for item in _fixed_order(tcp_order, "TLS extension order")
-                if item != "GREASE"
-            )
+            else _native_extension_order(tcp_order, "TLS extension order")
         ),
         "tls_use_new_alps_codepoint": _extension_present(tcp_extensions, 17613),
         "tls_signed_cert_timestamps": _extension_present(tcp_extensions, 18),
@@ -524,10 +530,9 @@ def candidate_from_bundle(bundle: Path, target: str) -> dict[str, Any]:
                 "http3_tls_extension_order": (
                     None
                     if isinstance(h3_order, dict) and h3_order.get("mode") == "permuted"
-                    else "-".join(
-                        str(item)
-                        for item in _fixed_order(h3_order, "HTTP/3 TLS extension order")
-                        if item != "GREASE"
+                    else _native_extension_order(
+                        h3_order,
+                        "HTTP/3 TLS extension order",
                     )
                 ),
                 "http3_disable_tls_signed_cert_timestamps": not _extension_present(

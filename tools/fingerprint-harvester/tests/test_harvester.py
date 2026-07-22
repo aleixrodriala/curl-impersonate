@@ -1262,6 +1262,32 @@ def test_ready_bundle_compiles_to_native_candidate(tmp_path):
     assert '.target = "chrome151",' in render_c_initializer(candidate)
 
 
+def test_native_candidate_omits_dynamic_tls_padding_extension(tmp_path):
+    samples = [
+        make_sample(
+            tls_order=[0, 21, 5, 10, 13, 16, 18, 27, 51],
+            http3_order=[0, 21, 5, 10, 13, 16, 18, 27, 51, 57],
+            extra_extensions=[(21, "")],
+        )
+        for _ in range(3)
+    ]
+    bundle = tmp_path / "capture"
+    write_capture_bundle(
+        bundle,
+        samples,
+        ConsumerChromeRelease("stable", "151.0.0.0", "linux"),
+        "linux",
+        "consumer-chrome",
+    )
+
+    candidate = candidate_from_bundle(bundle, "chrome151")
+
+    assert candidate["options"]["tls_extension_order"] == ("0-5-10-13-16-18-27-51")
+    assert candidate["options"]["http3_tls_extension_order"] == (
+        "0-5-10-13-16-18-27-51-57"
+    )
+
+
 def test_fixed_quic_transport_parameter_order_is_preserved(tmp_path):
     bundle = tmp_path / "capture"
     samples = [make_sample(parameter_order=[12584, 17, 15, 3, 1]) for _ in range(3)]

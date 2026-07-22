@@ -68,7 +68,7 @@
       "max": "default",
       "min": "1.0"
     },
-    "tls_extension_order": "0-23-65281-10-11-16-5-13-18-51-45-43-27-21",
+    "tls_extension_order": "0-23-65281-10-11-16-5-13-18-51-45-43-27",
     "tls_grease": true,
     "tls_permute_extensions": false,
     "tls_session_ticket": false,
