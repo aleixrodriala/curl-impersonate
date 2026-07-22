@@ -803,11 +803,15 @@ def test_cached_initial_rtt_does_not_create_a_variant():
     assert "12583:" not in profile["fingerprint"]["http3"]["http3"]["perk"]
 
 
-def test_ios_safari_capture_enables_session_diagnostics():
+def test_ios_safari_capture_uses_minimal_simulator_capabilities():
     capabilities = SafariRunner(platform="ios")._capabilities()
 
-    assert capabilities["safari:diagnose"] is True
-    assert capabilities["safari:useSimulator"] is True
+    assert capabilities == {
+        "browserName": "safari",
+        "platformName": "ios",
+        "safari:useSimulator": True,
+        "safari:deviceType": "iPhone",
+    }
 
 
 def test_capability_report_fails_closed_for_chrome_151_extensions():

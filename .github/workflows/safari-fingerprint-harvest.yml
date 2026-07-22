@@ -99,9 +99,6 @@ jobs:
           uv run --project tools/fingerprint-harvester \
             curl-impersonate-harvest safari-capture \
             --platform ios \
-            --ios-version "$IOS_RUNTIME_VERSION" \
-            --ios-device-name "iPhone 17" \
-            --ios-device-udid "$IOS_DEVICE_UDID" \
             --samples 5 \
             --output "${RUNNER_TEMP}/fingerprint-harvester/ios"
 
@@ -110,9 +107,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: safari-${{ matrix.platform }}
-          path: |
-            ${{ runner.temp }}/fingerprint-harvester
-            ~/Library/Logs/com.apple.WebDriver
+          path: ${{ runner.temp }}/fingerprint-harvester
           if-no-files-found: warn
           retention-days: 7
 

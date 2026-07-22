@@ -4,11 +4,12 @@ import re
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -175,6 +176,8 @@ class SafariRunner:
         self.build = ""
         self._process: subprocess.Popen[bytes] | None = None
         self._client: _WebDriverClient | None = None
+        self._log_handle: BinaryIO | None = None
+        self._log_path: Path | None = None
 
     def __enter__(self) -> "SafariRunner":
         if sys.platform != "darwin":
@@ -183,10 +186,18 @@ class SafariRunner:
             raise SafariRunnerError(f"SafariDriver is not executable: {self.driver}")
         self.version, self.build = _safari_version(self.driver)
         port = _free_port()
+        log_directory = (
+            Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir()))
+            / "fingerprint-harvester"
+            / "safaridriver"
+        )
+        log_directory.mkdir(parents=True, exist_ok=True)
+        self._log_path = log_directory / f"safaridriver-{os.getpid()}-{port}.log"
+        self._log_handle = self._log_path.open("wb")
         self._process = subprocess.Popen(
-            [str(self.driver), "--port", str(port)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            [str(self.driver), "--diagnose", "--port", str(port)],
+            stdout=self._log_handle,
+            stderr=subprocess.STDOUT,
             start_new_session=True,
         )
         self._client = _WebDriverClient(port)
@@ -200,8 +211,18 @@ class SafariRunner:
                 self._process.wait(timeout=10)
             if self._process.poll() is None:
                 self._process.kill()
+        if self._log_handle is not None:
+            self._log_handle.close()
         self._client = None
         self._process = None
+        self._log_handle = None
+
+    def _driver_log_tail(self) -> str:
+        if self._log_handle is not None:
+            self._log_handle.flush()
+        if self._log_path is None or not self._log_path.is_file():
+            return ""
+        return self._log_path.read_text(errors="replace")[-4000:]
 
     def _capabilities(self) -> dict[str, Any]:
         capabilities: dict[str, Any] = {"browserName": "safari"}
@@ -209,7 +230,6 @@ class SafariRunner:
             capabilities.update(
                 {
                     "platformName": "ios",
-                    "safari:diagnose": True,
                     "safari:useSimulator": True,
                     "safari:deviceType": self.ios_device_type,
                 }
@@ -229,7 +249,19 @@ class SafariRunner:
     ) -> dict[str, Any]:
         if self._client is None:
             raise SafariRunnerError("SafariRunner must be used as a context manager")
-        session_id, capabilities = self._client.create_session(self._capabilities())
+        try:
+            session_id, capabilities = self._client.create_session(self._capabilities())
+        except Exception as exc:
+            diagnostics = self._driver_log_tail()
+            process_status = (
+                self._process.poll() if self._process is not None else "not started"
+            )
+            suffix = (
+                f"\nSafariDriver diagnostics:\n{diagnostics}" if diagnostics else ""
+            )
+            raise SafariRunnerError(
+                f"{exc}\nSafariDriver process status: {process_status}{suffix}"
+            ) from exc
         try:
             self._client.navigate(session_id, tls_url)
             tls_payload = _read_json_body(self._client, session_id)
