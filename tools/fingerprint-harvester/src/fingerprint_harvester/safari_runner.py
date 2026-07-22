@@ -209,6 +209,7 @@ class SafariRunner:
             capabilities.update(
                 {
                     "platformName": "ios",
+                    "safari:diagnose": True,
                     "safari:useSimulator": True,
                     "safari:deviceType": self.ios_device_type,
                 }

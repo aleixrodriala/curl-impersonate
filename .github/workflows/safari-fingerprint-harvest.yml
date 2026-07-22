@@ -60,6 +60,19 @@ jobs:
           xcrun simctl boot "$device_udid" || true
           open -a Simulator --args -CurrentDeviceUDID "$device_udid"
           xcrun simctl bootstatus "$device_udid" -b
+
+          # Apple requires both settings on every iOS target, in addition to
+          # enabling safaridriver on the host Mac.
+          xcrun simctl spawn "$device_udid" defaults write \
+            com.apple.webinspectord RemoteInspectorEnabled -bool true
+          xcrun simctl spawn "$device_udid" defaults write \
+            com.apple.webinspectord RemoteAutomationEnabled -bool true
+          xcrun simctl spawn "$device_udid" notifyutil -p \
+            com.apple.webinspectord.enabled
+          xcrun simctl spawn "$device_udid" notifyutil -p \
+            com.apple.webinspectord.remote_automation_enabled
+          xcrun simctl launch "$device_udid" com.apple.mobilesafari
+          sleep 5
           echo "IOS_DEVICE_UDID=$device_udid" >> "$GITHUB_ENV"
           echo "IOS_RUNTIME_VERSION=$ios_version" >> "$GITHUB_ENV"
 
@@ -97,8 +110,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: safari-${{ matrix.platform }}
-          path: ${{ runner.temp }}/fingerprint-harvester
-          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/fingerprint-harvester
+            ~/Library/Logs/com.apple.WebDriver
+          if-no-files-found: warn
           retention-days: 7
 
   publish:

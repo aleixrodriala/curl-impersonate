@@ -53,6 +53,7 @@ from fingerprint_harvester.releases import (
     parse_version_history_versions,
 )
 from fingerprint_harvester.replay import compare_replay
+from fingerprint_harvester.safari_runner import SafariRunner
 
 
 def test_x86_64_play_profile_requests_only_x86_abis():
@@ -800,6 +801,13 @@ def test_cached_initial_rtt_does_not_create_a_variant():
         parameter["id"] != 12583 for parameter in normalized_transport["parameters"]
     )
     assert "12583:" not in profile["fingerprint"]["http3"]["http3"]["perk"]
+
+
+def test_ios_safari_capture_enables_session_diagnostics():
+    capabilities = SafariRunner(platform="ios")._capabilities()
+
+    assert capabilities["safari:diagnose"] is True
+    assert capabilities["safari:useSimulator"] is True
 
 
 def test_capability_report_fails_closed_for_chrome_151_extensions():
