@@ -107,6 +107,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
+      actions: write
       contents: write
     steps:
       - uses: actions/checkout@v4
@@ -209,6 +210,8 @@ jobs:
 
       - name: Commit verified profiles to the fork
         if: steps.candidate.outputs.propose == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -217,3 +220,4 @@ jobs:
           git add profiles
           git commit -m "Add current Safari fingerprint profiles"
           git push origin "HEAD:${GITHUB_REF_NAME}"
+          gh workflow run profile-release.yml --ref "${GITHUB_REF_NAME}"

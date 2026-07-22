@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -57,3 +58,35 @@ jobs:
           files: ${{ steps.collect-release-files.outputs.files }}
           prerelease: ${{ contains(github.ref_name, 'a') || contains(github.ref_name, 'b') || contains(github.ref_name, 'rc') }}
           draft: ${{ contains(github.ref_name, 'a') || contains(github.ref_name, 'b') || contains(github.ref_name, 'rc') }}
+
+  notify-curl-cffi:
+    name: Notify curl_cffi fork
+    runs-on: ubuntu-24.04
+    needs: publish-release
+    env:
+      DISPATCH_TOKEN: ${{ secrets.CURL_CFFI_DISPATCH_TOKEN }}
+    steps:
+      - name: Dispatch released profile set
+        if: env.DISPATCH_TOKEN != ''
+        env:
+          GH_TOKEN: ${{ env.DISPATCH_TOKEN }}
+        run: |
+          curl_version="${GITHUB_REF_NAME#v}"
+          gh api \
+            --method POST \
+            repos/aleixrodriala/curl_cffi/dispatches \
+            --input - <<JSON
+          {
+            "event_type": "curl_impersonate_release",
+            "client_payload": {
+              "curl_version": "${curl_version}",
+              "curl_tag": "${GITHUB_REF_NAME}",
+              "curl_sha": "${GITHUB_SHA}"
+            }
+          }
+          JSON
+
+      - name: Report disabled handoff
+        if: env.DISPATCH_TOKEN == ''
+        run: |
+          echo "CURL_CFFI_DISPATCH_TOKEN is not configured; skipping handoff."

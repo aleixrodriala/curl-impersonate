@@ -85,6 +85,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
+      actions: write
       contents: write
     steps:
       - uses: actions/checkout@v4
@@ -169,6 +170,7 @@ jobs:
       - name: Commit verified profile to the fork
         if: steps.candidate.outputs.propose == 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
           TARGET: ${{ steps.candidate.outputs.target }}
         run: |
           set -euo pipefail
@@ -178,3 +180,4 @@ jobs:
           git add profiles
           git commit -m "Add ${TARGET} fingerprint profile"
           git push origin "HEAD:${GITHUB_REF_NAME}"
+          gh workflow run profile-release.yml --ref "${GITHUB_REF_NAME}"

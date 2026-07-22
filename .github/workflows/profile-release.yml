@@ -1,0 +1,71 @@
+name: Publish verified profile release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "profiles/**"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: verified-profile-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Create release tag
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next profile release
+        id: version
+        run: |
+          set -euo pipefail
+          mapfile -t chrome_majors < <(
+            find profiles/chrome -maxdepth 1 -type f -name 'chrome*.json' \
+              -printf '%f\n' |
+              sed -nE 's/^chrome([0-9]+).*\.json$/\1/p' |
+              sort -n -u
+          )
+          if [[ ${#chrome_majors[@]} -eq 0 ]]; then
+            echo "No declarative Chrome profiles were found." >&2
+            exit 1
+          fi
+          major="${chrome_majors[-1]}"
+          revision=1
+          latest_tag="$(
+            git tag --list "v2.0.0-os${major}.*" \
+              --sort=-version:refname |
+              head -n 1
+          )"
+          if [[ -n "$latest_tag" ]]; then
+            if [[ ! "$latest_tag" =~ ^v2\.0\.0-os${major}\.([0-9]+)$ ]]; then
+              echo "Unexpected release tag: $latest_tag" >&2
+              exit 1
+            fi
+            revision="$((BASH_REMATCH[1] + 1))"
+          fi
+          tag="v2.0.0-os${major}.${revision}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Next verified profile release: $tag"
+
+      - name: Tag verified profiles
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$RELEASE_TAG" -m "$RELEASE_TAG"
+          git push origin "$RELEASE_TAG"
+          gh workflow run release.yml --ref "$RELEASE_TAG"
