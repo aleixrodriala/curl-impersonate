@@ -102,6 +102,26 @@ jobs:
             --samples 5 \
             --output "${RUNNER_TEMP}/fingerprint-harvester/ios"
 
+      - name: Collect native SafariDriver diagnostics
+        if: failure() && matrix.platform == 'ios'
+        run: |
+          set -euo pipefail
+          destination="${RUNNER_TEMP}/fingerprint-harvester/native-diagnostics"
+          mkdir -p "$destination"
+          if [[ -d "$HOME/Library/Logs/com.apple.WebDriver" ]]; then
+            cp -R "$HOME/Library/Logs/com.apple.WebDriver" "$destination/"
+          fi
+          for report in \
+            "$HOME"/Library/Logs/DiagnosticReports/safaridriver* \
+            /Library/Logs/DiagnosticReports/safaridriver*; do
+            if [[ -f "$report" ]]; then
+              cp "$report" "$destination/"
+            fi
+          done
+          xcrun simctl list devices > "$destination/simulator-devices.txt"
+          xcrun simctl spawn "$IOS_DEVICE_UDID" defaults read \
+            com.apple.webinspectord > "$destination/webinspectord-defaults.txt"
+
       - name: Upload sanitized evidence
         if: always()
         uses: actions/upload-artifact@v4
