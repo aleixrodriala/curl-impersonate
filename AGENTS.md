@@ -11,10 +11,6 @@ This repository is a CMake superbuild for `curl-impersonate`, not a typical app 
 - `.github/workflows/`: CI for Linux/macOS/Windows builds and tests.
 - `docker/`: Docker build definitions used for reproducible builds/distribution.
 
-**important**
-
-Don't update the patches directly, prompt the user to update the patches.
-
 ## Build, Test, and Development Commands
 - `make configure`: generate CMake build files in `build/` (honors `CMAKE_CONFIGURE_ARGS`).
 - `make build`: build all external dependencies and `curl-impersonate`.
