@@ -144,6 +144,7 @@ def _normalize_headers(lines: object) -> dict[str, object]:
     if not isinstance(lines, list):
         return {"order": [], "values": []}
     parsed = [_parse_header_line(str(line)) for line in lines]
+    parsed = [header for header in parsed if header[0] != "cache-control"]
     return {
         "order": [name for name, _ in parsed],
         "values": [
@@ -361,7 +362,7 @@ def normalize_http3(payload: dict[str, Any]) -> dict[str, Any]:
     header_lines = []
     if isinstance(raw_headers, list):
         for item in raw_headers:
-            if isinstance(item, dict) and item.get("name") != "cache-control":
+            if isinstance(item, dict):
                 header_lines.append(f"{item.get('name', '')}: {item.get('value', '')}")
 
     ja3n = tls.get("ja3n")

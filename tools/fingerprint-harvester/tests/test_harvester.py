@@ -673,13 +673,20 @@ def test_read_json_body_retries_partial_response():
 
 
 def test_normalize_sample_strips_dynamic_values_and_reload_header():
-    normalized = normalize_sample(make_sample())
+    sample = make_sample()
+    sample["tls_http2"]["http2"]["sent_frames"][2]["headers"].insert(
+        4, "cache-control: max-age=0"
+    )
+    normalized = normalize_sample(sample)
     tcp_extensions = normalized["tls_http2"]["tls"]["extensions"]
     key_share = next(item for item in tcp_extensions if item["id"] == 51)
+    h2_headers = normalized["tls_http2"]["http2"]["headers"]
     h3_headers = normalized["http3"]["http3"]["headers"]
 
     assert key_share["groups"] == ["GREASE", "X25519MLKEM768", "X25519"]
+    assert "cache-control" not in h2_headers["order"]
     assert "cache-control" not in h3_headers["order"]
+    assert h2_headers["order"][:4] == [":method", ":authority", ":scheme", ":path"]
     assert h3_headers["order"][:4] == [":method", ":authority", ":scheme", ":path"]
 
 
