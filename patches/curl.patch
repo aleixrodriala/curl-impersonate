@@ -11082,7 +11082,7 @@ index 0f8bc6fe08..d961a8943d 100644
    BIT(tr_encoding);         /* Transfer-Encoding please */
    BIT(use_resume);
 diff --git a/src/tool_getparam.c b/src/tool_getparam.c
-index 35c01b1d92..1cf592678c 100644
+index 35c01b1d92..3bab842757 100644
 --- a/src/tool_getparam.c
 +++ b/src/tool_getparam.c
 @@ -76,6 +76,7 @@ static ParameterError getstrn(char **str, const char *val,
@@ -11201,17 +11201,17 @@ index 35c01b1d92..1cf592678c 100644
    {"tls13-ciphers",              ARG_STRG|ARG_TLS, ' ', C_TLS13_CIPHERS},
    {"tlsauthtype",                ARG_STRG|ARG_TLS, ' ', C_TLSAUTHTYPE},
    {"tlspassword",              ARG_STRG|ARG_TLS|ARG_CLEAR, ' ', C_TLSPASSWORD},
-@@ -367,6 +399,10 @@ static const struct LongShort aliases[]= {
- #ifdef USE_WATT32
+@@ -368,6 +400,10 @@ static const struct LongShort aliases[]= {
    {"wdebug",                     ARG_BOOL, ' ', C_WDEBUG},
  #endif
+   {"write-out",                  ARG_STRG, 'w', C_WRITE_OUT},
 +  {"ws-cert-compression",        ARG_STRG|ARG_TLS, ' ', C_WS_CERT_COMPRESSION},  // curl-impersonate
 +  {"ws-disable-session-ticket",  ARG_BOOL, ' ', C_WS_DISABLE_SESSION_TICKET},  // curl-impersonate
 +  {"ws-httpheader",              ARG_STRG, ' ', C_WS_HTTPHEADER},  // curl-impersonate
 +  {"ws-httpheader-order",        ARG_STRG, ' ', C_WS_HTTPHEADER_ORDER},  // curl-impersonate
-   {"write-out",                  ARG_STRG, 'w', C_WRITE_OUT},
    {"xattr",                      ARG_BOOL, ' ', C_XATTR},
  };
+ 
 @@ -1305,9 +1341,14 @@ static ParameterError parse_header(struct OperationConfig *config,
        curlx_dyn_init(&line, 1024 * 100);
        while(my_get_line(file, &line, &error)) {
