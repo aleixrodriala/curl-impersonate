@@ -902,6 +902,30 @@ def test_cached_initial_rtt_does_not_create_a_variant():
     assert "12583:" not in profile["fingerprint"]["http3"]["http3"]["perk"]
 
 
+def test_cached_initial_rtt_is_dropped_from_a_four_section_perk():
+    first = make_sample()
+    first["http3"]["http3"]["perk_text_normalized"] += "|0,8"
+    second = deepcopy(first)
+    transport = next(
+        extension
+        for extension in second["http3"]["tls"]["extensions"]
+        if extension["id"] == 57
+    )
+    transport["data"].append({"id": 12583, "name": "initial_rtt", "value": 72383})
+    second["http3"]["http3"]["perk_text_normalized"] = second["http3"]["http3"][
+        "perk_text_normalized"
+    ].replace(";12584:", ";12583:AUTO;12584:")
+    second["http3"]["http3"]["perk_hash_normalized"] = "volatile-hash"
+
+    profile = build_profile([first, second])
+
+    assert profile["variant_count"] == 1
+    assert profile["selected_sample_count"] == 2
+    perk = profile["fingerprint"]["http3"]["http3"]["perk"]
+    assert "12583:" not in perk
+    assert perk.endswith("|0,8")
+
+
 def test_ios_safari_capture_uses_minimal_simulator_capabilities():
     capabilities = SafariRunner(platform="ios")._capabilities()
 

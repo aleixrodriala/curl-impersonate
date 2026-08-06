@@ -266,7 +266,9 @@ def _normalize_transport_parameters(items: object) -> list[dict[str, object]]:
 def _normalize_http3_perk(value: object) -> str:
     perk = str(value or "")
     sections = perk.split("|")
-    if len(sections) != 3:
+    # Settings, pseudo-header order and transport parameters are the first three
+    # sections; newer collectors append further sections after them.
+    if len(sections) < 3:
         return perk
     sections[2] = ";".join(
         parameter
