@@ -9,6 +9,7 @@ import pytest
 
 from fingerprint_harvester.android_apkmirror import (
     CHROME_CERTIFICATE_SHA256,
+    _x86_64_variant,
     chrome_release_url,
     extract_chrome_apkm,
 )
@@ -132,6 +133,97 @@ def test_extract_x86_64_android_chrome_bundle(tmp_path):
     assert (output / "chrome-chrome.apk").read_bytes() == b"feature"
     assert (output / "chrome-config.en.apk").read_bytes() == b"english"
     assert not (output / "chrome-config.es.apk").exists()
+
+
+class _VariantsPage:
+    """Minimal stand-in for the Playwright locators used on a release page."""
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    def locator(self, selector):
+        assert selector == ".variants-table .table-row"
+        return _Locator([_VariantRow(row) for row in self._rows])
+
+
+class _VariantRow:
+    def __init__(self, row):
+        self._row = row
+
+    def inner_text(self):
+        return self._row["text"]
+
+    def locator(self, selector):
+        if selector == ".apkm-badge":
+            return _Locator(self._row["badges"])
+        return _Locator([self._row["href"]] if self._row.get("href") else [])
+
+
+class _Locator:
+    def __init__(self, items):
+        self._items = items
+
+    def count(self):
+        return len(self._items)
+
+    def nth(self, index):
+        item = self._items[index]
+        return item if hasattr(item, "inner_text") else _Text(item)
+
+    @property
+    def first(self):
+        return self.nth(0)
+
+
+class _Text:
+    def __init__(self, value):
+        self._value = value
+
+    def inner_text(self):
+        return self._value
+
+    def count(self):
+        return 1
+
+    def evaluate(self, expression):
+        assert "href" in expression
+        return self._value
+
+
+def test_x86_64_variant_skips_standalone_apk_listings():
+    page = _VariantsPage(
+        [
+            {
+                "text": "151.0.7922.71 BUNDLE 27 S 792207108 x86_64 Android 12L+",
+                "badges": ["BUNDLE", "27 S"],
+                "href": "https://apkmirror.test/chrome-7-android-apk-download/",
+            },
+            {
+                "text": "151.0.7922.71 APK 792207108 x86_64 Android 10+",
+                "badges": ["APK"],
+                "href": "https://apkmirror.test/chrome-6-android-apk-download/",
+            },
+        ]
+    )
+
+    assert _x86_64_variant(page) == (
+        "https://apkmirror.test/chrome-7-android-apk-download/",
+        792207108,
+    )
+
+
+def test_x86_64_variant_ignores_releases_without_a_bundle():
+    page = _VariantsPage(
+        [
+            {
+                "text": "151.0.7922.83 APK 792208300 x86_64 Android 10+",
+                "badges": ["APK"],
+                "href": "https://apkmirror.test/chrome-2-android-apk-download/",
+            },
+        ]
+    )
+
+    assert _x86_64_variant(page) is None
 
 
 def test_android_chrome_release_url_uses_version_slug():

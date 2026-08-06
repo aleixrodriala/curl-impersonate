@@ -149,13 +149,25 @@ def _wait_for_variants(page: object, timeout_ms: int = 30_000) -> bool:
     )
 
 
+def _is_apkm_bundle(row: object) -> bool:
+    badges = row.locator(".apkm-badge")
+    return any(
+        badges.nth(index).inner_text().strip().upper() == "BUNDLE"
+        for index in range(badges.count())
+    )
+
+
 def _x86_64_variant(page: object) -> tuple[str, int] | None:
     rows = page.locator(".variants-table .table-row")
-    matches: list[tuple[int, str, int]] = []
+    matches: list[tuple[int, int, str, int]] = []
     for index in range(rows.count()):
         row = rows.nth(index)
         text = " ".join(row.inner_text().split())
         if "x86_64" not in text:
+            continue
+        # APKMirror also lists standalone APKs, which carry none of the split
+        # APKs or the info.json metadata that extract_chrome_apkm() verifies.
+        if not _is_apkm_bundle(row):
             continue
         link = row.locator('a[href*="android-apk-download/"]').first
         if not link.count():
@@ -167,13 +179,14 @@ def _x86_64_variant(page: object) -> tuple[str, int] | None:
         matches.append(
             (
                 architecture_rank,
+                index,
                 link.evaluate("element => element.href"),
                 int(codes[0]),
             )
         )
     if not matches:
         return None
-    _, url, version_code = min(matches)
+    _, _, url, version_code = min(matches)
     return url, version_code
 
 
