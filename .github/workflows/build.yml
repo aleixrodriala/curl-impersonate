@@ -65,6 +65,7 @@ jobs:
             host: aarch64-linux-gnu
             host_label: aarch64-linux-gnu
             zigflags: -target aarch64-linux-gnu.2.17
+            curl_runner: qemu-aarch64 -L /usr/aarch64-linux-gnu
             make: make
           - os: ubuntu-latest
             platform: linux
@@ -72,6 +73,7 @@ jobs:
             host: aarch64-linux-musl
             host_label: aarch64-linux-musl
             zigflags: -target aarch64-linux-musl -fPIC -mno-outline-atomics
+            curl_runner: qemu-aarch64
             make: make
           - os: ubuntu-latest
             platform: linux
@@ -79,6 +81,7 @@ jobs:
             host: arm-linux-gnueabihf
             host_label: arm-linux-gnueabihf
             zigflags: -target arm-linux-gnueabihf.2.17 -mcpu=arm1176jzf_s
+            curl_runner: qemu-arm -L /usr/arm-linux-gnueabihf
             make: make
           - os: ubuntu-latest
             platform: linux
@@ -86,6 +89,7 @@ jobs:
             host: riscv64-linux-gnu
             host_label: riscv64-linux-gnu
             zigflags: -target riscv64-linux-gnu.2.27
+            curl_runner: qemu-riscv64 -L /usr/riscv64-linux-gnu
             make: make
           - os: ubuntu-latest
             platform: linux
@@ -93,6 +97,7 @@ jobs:
             host: loongarch64-linux-gnu
             host_label: loongarch64-linux-gnu
             zigflags: -target loongarch64-linux-gnu.2.36 -fPIC
+            curl_runner: qemu-loongarch64 -L /usr/loongarch64-linux-gnu
             make: make
           - os: ubuntu-latest
             platform: android
@@ -217,6 +222,10 @@ jobs:
           sudo apt-get install gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf gcc-riscv64-linux-gnu gcc-14-loongarch64-linux-gnu
           sudo apt-get install golang-go
 
+      - name: Install Linux emulators
+        if: matrix.platform == 'linux'
+        run: sudo apt-get install -y qemu-user
+
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
         run: |
@@ -256,7 +265,7 @@ jobs:
           ${{ matrix.make }} configure BUILD_DIR=build CMAKE_CONFIGURE_ARGS="$cmake_args"
           ${{ matrix.make }} build BUILD_DIR=build CMAKE_CONFIGURE_ARGS="$cmake_args"
           if [[ "${{ matrix.platform }}" == "linux" || "${{ matrix.platform }}" == "macos" ]]; then
-            ${{ matrix.make }} checkbuild BUILD_DIR=build CMAKE_CONFIGURE_ARGS="$cmake_args"
+            ${{ matrix.make }} checkbuild BUILD_DIR=build CMAKE_CONFIGURE_ARGS="$cmake_args" CURL_RUNNER="${{ matrix.curl_runner }}"
           elif [[ "${{ matrix.platform }}" == "ios" ]]; then
             if [[ ! -f build/deps/build/curl/src/curl-impersonate.app/curl-impersonate ]]; then
               echo "Missing iOS curl-impersonate artifact: build/deps/build/curl/src/curl-impersonate.app/curl-impersonate" >&2

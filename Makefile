@@ -7,6 +7,7 @@ CMAKE_BUILD_ARGS ?=
 CMAKE_INSTALL_ARGS ?=
 TARGET ?= curl-impersonate
 CURL_BIN ?= $(BUILD_DIR)/deps/build/curl/src/curl-impersonate
+CURL_RUNNER ?=
 LIBIDN2_VERSION ?= 2.3.7
 LIBIDN2_URL ?= https://ftp.gnu.org/gnu/libidn/libidn2-$(LIBIDN2_VERSION).tar.gz
 
@@ -36,7 +37,7 @@ target: configure
 checkbuild:
 	@test -x "$(CURL_BIN)" || { echo "Missing binary: $(CURL_BIN)"; exit 1; }
 	@set -e; \
-	v="$$( "$(CURL_BIN)" -V )"; \
+	v="$$( $(CURL_RUNNER) "$(CURL_BIN)" -V )"; \
 	echo "$$v"; \
 	for feature in zlib zstd brotli nghttp2 BoringSSL 'AppleIDN|libidn2'; do \
 		echo "$$v" | grep -Eq "$$feature" || { \

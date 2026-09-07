@@ -1,3 +1,4 @@
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -39,3 +40,29 @@ def test_checkbuild_propagates_binary_failure(tmp_path):
     )
     assert result.returncode != 0
     assert "Build OK" not in result.stdout
+
+
+@pytest.mark.parametrize("exit_code", [0, 1])
+def test_checkbuild_uses_runner_and_propagates_status(tmp_path, exit_code):
+    binary = tmp_path / "curl impersonate"
+    binary.write_text(
+        '#!/bin/sh\n[ "$1" = -V ] || exit 2\n'
+        "printf '%s\\n' '" + " ".join(FEATURES) + f"'\nexit {exit_code}\n"
+    )
+    binary.chmod(0o755)
+    runner = tmp_path / "test runner"
+    runner.write_text('#!/bin/sh\n[ "$1" = --test-flag ] || exit 2\nshift\nexec "$@"\n')
+    runner.chmod(0o755)
+    result = subprocess.run(
+        [
+            "make",
+            "checkbuild",
+            f"CURL_BIN={binary}",
+            f"CURL_RUNNER={shlex.quote(str(runner))} --test-flag",
+        ],
+        cwd=Path(__file__).parents[3],
+        text=True,
+        capture_output=True,
+    )
+    assert (result.returncode == 0) == (exit_code == 0)
+    assert ("Build OK" in result.stdout) == (exit_code == 0)
