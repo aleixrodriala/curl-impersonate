@@ -69,12 +69,15 @@ OPTION_ORDER = (
     "http2_no_priority",
     "http3_settings",
     "http3_pseudo_headers_order",
+    "quic_cid_length",
     "quic_transport_parameters",
     "http3_tls_extension_order",
     "ech",
     "tls_extension_order",
     "tls_use_new_alps_codepoint",
     "tls_signed_cert_timestamps",
+    "tls_trust_anchors",
+    "http3_tls_trust_anchors",
     "http3_disable_tls_signed_cert_timestamps",
     "http3_disable_tls_status_request",
     "tls_delegated_credentials",
@@ -271,10 +274,12 @@ def _extension_values(
     extensions: object,
     extension_id: int,
     field: str,
+    *,
+    include_grease: bool = False,
 ) -> list[str]:
     extension = _find_extension(extensions, extension_id)
     values = extension.get(field, []) if extension is not None else []
-    return [str(item) for item in values if item != "GREASE"]
+    return [str(item) for item in values if include_grease or item != "GREASE"]
 
 
 def _minimum_tls_version(extensions: object) -> str:
@@ -422,6 +427,18 @@ def _native_signature_names(values: list[str]) -> list[str]:
     return [SIGNATURE_CODEPOINT_NAMES.get(value, value) for value in values]
 
 
+def _native_trust_anchors(extensions: object) -> str:
+    extension = _find_extension(extensions, 51764)
+    if extension is None:
+        return "none"
+    order = extension.get("id_order")
+    if isinstance(order, dict) and order.get("mode") == "fixed" and extension["ids"]:
+        return "fixed:" + ",".join(
+            str(item) for item in _fixed_order(order, "TLS trust anchor order")
+        )
+    return ",".join(extension["ids"])
+
+
 def candidate_from_bundle(bundle: Path, target: str) -> dict[str, Any]:
     manifest = load_json(bundle / "manifest.json")
     readiness = load_json(bundle / "readiness.json")
@@ -470,7 +487,7 @@ def candidate_from_bundle(bundle: Path, target: str) -> dict[str, Any]:
         ],
         "curves": ":".join(_extension_values(tcp_extensions, 10, "groups")),
         "signature_algorithms": _native_signature_names(
-            _extension_values(tcp_extensions, 13, "algorithms")
+            _extension_values(tcp_extensions, 13, "algorithms", include_grease=True)
         ),
         "npn": False,
         "alpn": _extension_present(tcp_extensions, 16),
@@ -509,18 +526,25 @@ def candidate_from_bundle(bundle: Path, target: str) -> dict[str, Any]:
         options.pop("cert_compression")
     if not priority:
         options["http2_no_priority"] = True
+    if _extension_present(tcp_extensions, 51764):
+        options["tls_trust_anchors"] = _native_trust_anchors(tcp_extensions)
     if isinstance(h3, dict):
         h3_tls = h3.get("tls")
         http3 = h3.get("http3")
         if not isinstance(h3_tls, dict) or not isinstance(http3, dict):
             raise ValueError("capture bundle has incomplete HTTP/3 sections")
+        perk_sections = str(http3.get("perk", "")).split("|")
+        if len(perk_sections) > 3 and perk_sections[3] == "0,8":
+            options["quic_cid_length"] = "webkit"
         h3_extensions = h3_tls.get("extensions")
         h3_order = h3_tls.get("extension_order")
         transport = _find_extension(h3_extensions, 57)
         options.update(
             {
                 "http3_signature_algorithms": _native_signature_names(
-                    _extension_values(h3_extensions, 13, "algorithms")
+                    _extension_values(
+                        h3_extensions, 13, "algorithms", include_grease=True
+                    )
                 ),
                 "http3_settings": _http3_settings(http3.get("settings")),
                 "http3_pseudo_headers_order": str(
@@ -543,6 +567,10 @@ def candidate_from_bundle(bundle: Path, target: str) -> dict[str, Any]:
                 ),
             }
         )
+        if _extension_present(h3_extensions, 51764):
+            options["http3_tls_trust_anchors"] = _native_trust_anchors(h3_extensions)
+        elif "tls_trust_anchors" in options:
+            options["http3_tls_trust_anchors"] = "none"
 
     release = manifest.get("expected_release")
     release = release if isinstance(release, dict) else {}

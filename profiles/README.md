@@ -35,9 +35,16 @@ cannot express independently. A generated profile is published only after a
 native build and replay match the retained browser evidence.
 
 Desktop Chrome majors expose explicit `_linux`, `_windows`, and `_macos`
-targets because their default headers and client hints differ even when their
-TLS, HTTP/2, HTTP/3, and QUIC transport behavior is identical. The unsuffixed
-target is retained as the macOS-compatible default.
+targets. Chrome 152 also has `_macos_arm64`, so captures from Intel and Apple
+Silicon can be represented independently when their TLS settings differ. Each
+target is verified against its own retained capture. The unsuffixed target
+uses the Intel macOS capture.
+
+Chrome 152 profiles preserve GREASE in signature algorithms and fixed or
+permuted trust-anchor order independently for TCP and QUIC TLS. The capture
+normalizer compares trust-anchor contents while retaining order observations;
+changed IDs remain distinct fingerprints. QUIC connection ID lengths are
+compiled from the collector's evidence.
 
 Android Chrome majors use an explicit `_android` target. Android evidence comes
 from native x86_64 Chrome on an Android emulator, while physical ARM64 evidence

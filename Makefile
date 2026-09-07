@@ -35,14 +35,14 @@ target: configure
 
 checkbuild:
 	@test -x "$(CURL_BIN)" || { echo "Missing binary: $(CURL_BIN)"; exit 1; }
-	@v="$$( "$(CURL_BIN)" -V )"; \
+	@set -e; \
+	v="$$( "$(CURL_BIN)" -V )"; \
 	echo "$$v"; \
-	echo "$$v" | grep -q zlib; \
-	echo "$$v" | grep -q zstd; \
-	echo "$$v" | grep -q brotli; \
-	echo "$$v" | grep -q nghttp2; \
-	echo "$$v" | grep -q BoringSSL; \
-	echo "$$v" | grep -Eq "AppleIDN|libidn2"; \
+	for feature in zlib zstd brotli nghttp2 BoringSSL 'AppleIDN|libidn2'; do \
+		echo "$$v" | grep -Eq "$$feature" || { \
+			echo "Missing required feature: $$feature" >&2; exit 1; \
+		}; \
+	done; \
 	echo "Build OK"
 .PHONY: checkbuild
 

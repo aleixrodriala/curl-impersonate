@@ -116,4 +116,12 @@ def compare_replay(
         fingerprint_comparison_view(expected),
         fingerprint_comparison_view(actual),
     )
+    if actual_profile["variant_count"] != 1:
+        differences.append(
+            ProfileDifference(
+                path="capture.variant_count",
+                before=1,
+                after=actual_profile["variant_count"],
+            )
+        )
     return actual_profile, differences

@@ -183,6 +183,7 @@ jobs:
             "${target}_linux"
             "${target}_windows"
             "${target}_macos"
+            "${target}_macos_arm64"
           )
           existing=0
           for candidate in "${targets[@]}"; do
@@ -208,14 +209,9 @@ jobs:
             cp -R "$bundle" "$retained/$platform"
           done
 
-          reference="$retained/mac"
-          for platform in linux win64 mac_arm64; do
-            uv run --project tools/fingerprint-harvester \
-              curl-impersonate-harvest diff --transport-only \
-              "$reference" "$retained/$platform"
-          done
-
-          bundles=(mac linux win64 mac)
+          # Browser transport settings can differ by OS and architecture.
+          # Each native target must pass replay against its own captured bundle.
+          bundles=(mac linux win64 mac mac_arm64)
           for index in "${!targets[@]}"; do
             candidate="${targets[$index]}"
             bundle="${bundles[$index]}"
@@ -247,8 +243,9 @@ jobs:
             "${TARGET}_linux"
             "${TARGET}_windows"
             "${TARGET}_macos"
+            "${TARGET}_macos_arm64"
           )
-          bundles=(mac linux win64 mac)
+          bundles=(mac linux win64 mac mac_arm64)
           for index in "${!targets[@]}"; do
             candidate="${targets[$index]}"
             bundle="${bundles[$index]}"

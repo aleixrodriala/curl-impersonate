@@ -972,7 +972,7 @@ def test_ios_safari_capture_uses_webkit_helper(monkeypatch, tmp_path):
     assert sample == output
 
 
-def test_capability_report_fails_closed_for_chrome_151_extensions():
+def test_capability_report_supports_trust_anchors_but_rejects_server_padding():
     sample = make_sample(extra_extensions=[(4832, "0000"), (51764, "0000")])
     profile = build_profile([sample, deepcopy(sample), deepcopy(sample)])
 
@@ -980,7 +980,6 @@ def test_capability_report_fails_closed_for_chrome_151_extensions():
 
     assert {gap.feature for gap in gaps} == {
         "TLS extension 4832",
-        "TLS extension 51764",
     }
 
 

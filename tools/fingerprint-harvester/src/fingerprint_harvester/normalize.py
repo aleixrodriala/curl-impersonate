@@ -44,15 +44,25 @@ def _normalize_grease(value: object) -> object:
     return value
 
 
+def _normalize_tls_grease(value: object) -> object:
+    normalized = _normalize_grease(value)
+    codepoint = value
+    if isinstance(value, str) and re.fullmatch(r"0[xX][0-9a-fA-F]{1,4}", value):
+        codepoint = int(value, 16)
+    if isinstance(codepoint, int) and codepoint in range(0x0A0A, 0x10000, 0x1010):
+        return GREASE
+    return normalized
+
+
 def _extension_id(name: str, explicit_id: object = None) -> int | str:
     if "GREASE" in name.upper():
         return GREASE
     if isinstance(explicit_id, int):
-        return explicit_id
+        return _normalize_tls_grease(explicit_id)
     match = UNKNOWN_EXTENSION_PATTERN.search(name) or EXTENSION_ID_PATTERN.search(name)
     if match is None:
         raise ValueError(f"Could not determine TLS extension id from {name!r}")
-    return int(match.group(1))
+    return _normalize_tls_grease(int(match.group(1)))
 
 
 def _extension_name(extension_id: int | str, observed_name: str) -> str:
@@ -62,7 +72,7 @@ def _extension_name(extension_id: int | str, observed_name: str) -> str:
 
 
 def _group_name(value: object) -> object:
-    value = _normalize_grease(value)
+    value = _normalize_tls_grease(value)
     if not isinstance(value, str) or value == GREASE:
         return value
     return re.sub(r"\s+\(\d+\)$", "", value)
@@ -74,10 +84,49 @@ def _algorithm_names(items: object) -> list[object]:
     normalized: list[object] = []
     for item in items:
         if isinstance(item, dict):
-            normalized.append(_normalize_grease(item.get("name", item.get("value"))))
+            value = item.get("value")
+            normalized.append(
+                GREASE
+                if _normalize_tls_grease(value) == GREASE
+                else _normalize_tls_grease(item.get("name", value))
+            )
         else:
             normalized.append(_group_name(item))
     return normalized
+
+
+def _normalize_trust_anchors(value: object) -> dict[str, Any]:
+    if not isinstance(value, str):
+        raise ValueError("TLS trust anchors must contain hexadecimal wire data")
+    try:
+        wire = bytes.fromhex(value)
+    except ValueError as exc:
+        raise ValueError("TLS trust anchors contain invalid hexadecimal data") from exc
+    if len(wire) < 2 or int.from_bytes(wire[:2], "big") != len(wire) - 2:
+        raise ValueError("TLS trust anchor list has an invalid length")
+    ids = []
+    offset = 2
+    while offset < len(wire):
+        length = wire[offset]
+        offset += 1
+        if not length or offset + length > len(wire):
+            raise ValueError("TLS trust anchor ID has an invalid length")
+        components = []
+        component = 0
+        start = True
+        for octet in wire[offset : offset + length]:
+            if start and octet == 0x80:
+                raise ValueError("TLS trust anchor ID is not minimally encoded")
+            component = (component << 7) | (octet & 0x7F)
+            start = not (octet & 0x80)
+            if start:
+                components.append(str(component))
+                component = 0
+        if not start:
+            raise ValueError("TLS trust anchor ID has an incomplete component")
+        ids.append(".".join(components))
+        offset += length
+    return {"ids": sorted(ids), "id_order": ids}
 
 
 def _normalize_trackme_extension(extension: dict[str, Any]) -> dict[str, Any]:
@@ -116,7 +165,9 @@ def _normalize_trackme_extension(extension: dict[str, Any]) -> dict[str, Any]:
         normalized["protocols"] = extension.get("protocols", [])
     elif extension_id == 65037:
         normalized["present"] = True
-    elif extension_id in (4832, 51764):
+    elif extension_id == 51764:
+        normalized.update(_normalize_trust_anchors(extension.get("data", "")))
+    elif extension_id == 4832:
         normalized["data"] = extension.get("data", "")
     elif "data" in extension and extension["data"] not in (None, ""):
         normalized["data"] = extension["data"]
@@ -213,7 +264,7 @@ def normalize_trackme(payload: dict[str, Any]) -> dict[str, Any]:
         "protocol": payload.get("http_version", ""),
         "user_agent": payload.get("user_agent", ""),
         "tls": {
-            "ciphers": [_normalize_grease(item) for item in tls.get("ciphers", [])],
+            "ciphers": [_normalize_tls_grease(item) for item in tls.get("ciphers", [])],
             "extension_order": [item["id"] for item in extensions],
             "extensions": sorted(extensions, key=_extension_sort_key),
             "ja4": tls.get("ja4", ""),
@@ -322,7 +373,10 @@ def _normalize_http3_extension(extension: dict[str, Any]) -> dict[str, Any]:
         if isinstance(data, dict):
             normalized["type"] = data.get("type", "")
             normalized["cipher_suite"] = data.get("cipher_suite", {})
-    elif extension_id in (4832, 51764) and isinstance(data, dict):
+    elif extension_id == 51764:
+        raw = data.get("raw", "") if isinstance(data, dict) else data
+        normalized.update(_normalize_trust_anchors(raw))
+    elif extension_id == 4832 and isinstance(data, dict):
         normalized["data"] = data.get("raw", "")
     elif isinstance(data, list):
         normalized["values"] = _algorithm_names(data)
@@ -423,6 +477,10 @@ def _stable_view(sample: dict[str, Any]) -> dict[str, Any]:
     stable = deepcopy(sample)
     stable.pop("browser", None)
     stable["tls_http2"]["tls"].pop("extension_order", None)
+    for protocol in ("tls_http2", "http3"):
+        for extension in stable.get(protocol, {}).get("tls", {}).get("extensions", []):
+            if extension.get("id") == 51764:
+                extension.pop("id_order", None)
     http3 = stable.get("http3")
     if isinstance(http3, dict):
         http3["tls"].pop("extension_order", None)
@@ -447,6 +505,10 @@ def fingerprint_comparison_view(fingerprint: dict[str, Any]) -> dict[str, Any]:
     comparable = deepcopy(fingerprint)
     tcp_tls = comparable.get("tls_http2", {}).get("tls", {})
     h3_tls = comparable.get("http3", {}).get("tls", {})
+    for tls in (tcp_tls, h3_tls):
+        for extension in tls.get("extensions", []):
+            if extension.get("id") == 51764 and "id_order" in extension:
+                extension["id_order"] = _comparison_order(extension["id_order"])
     if isinstance(tcp_tls, dict) and "extension_order" in tcp_tls:
         tcp_tls["extension_order"] = _comparison_order(tcp_tls["extension_order"])
     if isinstance(h3_tls, dict) and "extension_order" in h3_tls:
@@ -526,6 +588,19 @@ def build_profile(samples: list[dict[str, Any]]) -> dict[str, Any]:
         for index in selected_indexes
     ]
     selected["tls_http2"]["tls"]["extension_order"] = _order_observation(tls_orders)
+    for protocol in ("tls_http2", "http3"):
+        for extension in (
+            selected.get(protocol, {}).get("tls", {}).get("extensions", [])
+        ):
+            if extension.get("id") == 51764:
+                extension["id_order"] = _order_observation(
+                    [
+                        _find_extension(
+                            normalized[index][protocol]["tls"]["extensions"], 51764
+                        )["id_order"]
+                        for index in selected_indexes
+                    ]
+                )
     if "http3" in selected:
         http3_orders = [
             normalized[index]["http3"]["tls"]["extension_order"]

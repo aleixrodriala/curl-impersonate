@@ -23,11 +23,13 @@ SUPPORTED_TLS_EXTENSIONS = {
     57,
     17513,
     17613,
+    51764,
     65037,
     65281,
 }
 
 SUPPORTED_SIGNATURE_ALGORITHMS = {
+    "GREASE",
     "ecdsa_secp256r1_sha256",
     "ecdsa_secp384r1_sha384",
     "ecdsa_secp521r1_sha512",
@@ -189,6 +191,19 @@ def _extension_gaps(
                 )
             )
         if extension_id == 13:
+            algorithms = extension.get("algorithms", [])
+            if "GREASE" in algorithms and (
+                algorithms[0] != "GREASE"
+                or algorithms.count("GREASE") != 1
+                or len(algorithms) < 2
+            ):
+                gaps.append(
+                    _gap(
+                        f"{path}[{index}].algorithms",
+                        "TLS signature algorithm GREASE position",
+                        "BoringSSL emits one GREASE value before the real algorithms",
+                    )
+                )
             for algorithm in extension.get("algorithms", []):
                 name = SIGNATURE_CODEPOINT_NAMES.get(str(algorithm), str(algorithm))
                 if name not in SUPPORTED_SIGNATURE_ALGORITHMS:
@@ -202,6 +217,25 @@ def _extension_gaps(
                             ),
                         )
                     )
+        if extension_id == 51764:
+            ids = extension.get("ids")
+            order = extension.get("id_order")
+            if not isinstance(ids, list) or any(
+                not isinstance(item, str) for item in ids
+            ):
+                gaps.append(
+                    _gap(
+                        f"{path}[{index}].ids",
+                        "TLS trust anchor IDs",
+                        "normalized IDs are missing",
+                    )
+                )
+            else:
+                gaps.extend(
+                    _order_gaps(
+                        order, f"{path}[{index}].id_order", "TLS trust anchor order"
+                    )
+                )
         if extension_id == 10:
             for group in extension.get("groups", []):
                 if group not in SUPPORTED_GROUPS:
@@ -275,6 +309,15 @@ def _http2_gaps(http2: dict[str, Any], path: str) -> list[CapabilityGap]:
 def _http3_gaps(http3: dict[str, Any], quic_tls: dict[str, Any]) -> list[CapabilityGap]:
     path = "fingerprint.http3.http3"
     gaps: list[CapabilityGap] = []
+    perk_sections = str(http3.get("perk", "")).split("|")
+    if len(perk_sections) > 3 and perk_sections[3] != "0,8":
+        gaps.append(
+            _gap(
+                f"{path}.perk",
+                "QUIC connection ID lengths",
+                "captured lengths have no exact native profile",
+            )
+        )
     settings = http3.get("settings")
     if not isinstance(settings, list) or not settings:
         gaps.append(_gap(f"{path}.settings", "HTTP/3 SETTINGS", "field is empty"))

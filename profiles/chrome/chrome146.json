@@ -30,6 +30,7 @@
     "ech": "true",
     "form_boundary": "webkit",
     "http3_pseudo_headers_order": "masp",
+    "quic_cid_length": "webkit",
     "http3_settings": "1:65536;6:262144;7:100;51:1;GREASE",
     "http3_signature_algorithms": [
       "ecdsa_secp256r1_sha256",
